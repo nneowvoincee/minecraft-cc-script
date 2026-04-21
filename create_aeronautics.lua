@@ -146,6 +146,10 @@ local function controlTask()
             term.write(string.format("tar_acc:%2.1f,k:%2.1f,r:%2.2f,o:%2d,E:%2d\n",
             target_acc, final_required_kinetic, ratio, output, error))
 
+            term.setCursorPos(1, 6)
+            term.clearLine()
+            term.write(string.format("E:%2d\n", error))
+
         end
 
         -- 输出到螺旋桨（反相）
