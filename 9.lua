@@ -120,13 +120,25 @@ local function controlTask()
         local output, target_acc
 
         if math.abs(error) <= PID_ZONE then
-            -- ===== PID 精细区 =====
-            -- 计算期望速度（线性减速至0）
-            local targetSpeed = (error / PID_ZONE) * MAX_CRUISE_SPEED
-            local speedError = targetSpeed - v_up   -- 注意：此处应使用向上为正的速度 v_up
+            ---- ===== PID 精细区 =====
+            ---- 计算期望速度（线性减速至0）
+            --local targetSpeed = (error / PID_ZONE) * MAX_CRUISE_SPEED
+            --local speedError = targetSpeed - v_up   -- 注意：此处应使用向上为正的速度 v_up
+            --
+            ---- PID 输出目标净加速度 target_acc
+            --target_acc = control:step(speedError)
+              -- ===== 物理预测制动区 =====
+            local current_kinetic = v*v/2
+            local required_potential = GRAVITY* error
+            local final_required_kinetic = 0
 
-            -- PID 输出目标净加速度 target_acc
-            target_acc = control:step(speedError)
+            if (v_up <= 0) then
+                current_kinetic = -current_kinetic
+            end
+            final_required_kinetic = required_potential - current_kinetic
+            local s = math.abs(v) * TICK
+
+            target_acc = final_required_kinetic / s
 
         else
             -- ===== 物理预测制动区 =====
@@ -140,16 +152,15 @@ local function controlTask()
             final_required_kinetic = required_potential*DELTA - current_kinetic
 
             target_acc = final_required_kinetic / math.abs(error)
-
         end
 
-        -- 与物理区完全相同的 ratio 计算
         local airPressure = getAirPressure()
         local ratio = (target_acc + GRAVITY) / (MAX_ACC_UP * airPressure)
         output = math.floor(ratio * 15 + 0.5)
 
         if output > 15 then output = 15
         elseif output < 0 then output = 0 end
+
         -- 输出到螺旋桨（反相）
         redstone.setAnalogOutput("bottom", 15 - output)
 
