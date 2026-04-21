@@ -34,46 +34,48 @@ if not sensor then
 end
 
 local KP, KI, KD = 1.0, 0.017, 2.0
-local TICK = 0.1   -- control interval in seconds
+local TICK = 0.1
 
--- Shared variable for target height (can be updated by input task)
 local targetHeight = 100
 
--- Initialize PID with current redstone output (bumpless start)
-local startPower = redstone.getAnalogOutput("right") or 0
-local control = Pid.createPid(KP, KI, KD, TICK, startPower)
+-- Read current output on BOTTOM to initialize PID without a jump
+local startPower = redstone.getAnalogOutput("bottom") or 0
+-- But since logic is inverted, we need to invert it back to PID's internal scale (0=idle, 15=max)
+local startPowerInternal = 15 - startPower
+local control = Pid.createPid(KP, KI, KD, TICK, startPowerInternal)
 
--- ===== Task 1: Background PID control loop =====
+-- ===== Background PID task (inverted, bottom output) =====
 local function pidTask()
     while true do
         local currentHeight = sensor.getHeight()
         local error = targetHeight - currentHeight
         local output = control:step(error)
 
-        -- Clamp to [0, 15]
+        -- Clamp
         if output > 15 then output = 15
         elseif output < 0 then output = 0 end
         output = math.floor(output + 0.5)
 
-        redstone.setAnalogOutput("right", output)
+        -- Invert for this specific thruster: 0 = full pull, 15 = off
+        local invertedOutput = 15 - output
 
-        -- Sleep to maintain control frequency
+        redstone.setAnalogOutput("bottom", invertedOutput)
+
         sleep(TICK)
     end
 end
 
--- ===== Task 2: Command line input =====
+-- ===== Input task (unchanged) =====
 local function inputTask()
     term.setTextColor(colors.yellow)
-    print("PID Altitude Hold Active")
+    print("PID Altitude Hold Active (Inverted Bottom Output)")
     print("Current target: " .. targetHeight)
-    print("Enter a new target height (>= -64) and press Enter.")
-    print("-------------------------------------------")
+    print("Enter new target height (>= -64):")
     term.setTextColor(colors.white)
 
     while true do
         write("New target: ")
-        local input = read()   -- Blocking read, but parallel handles it
+        local input = read()
         local newTarget = tonumber(input)
         if newTarget and newTarget >= -64 then
             targetHeight = newTarget
@@ -84,5 +86,5 @@ local function inputTask()
     end
 end
 
--- ===== Run both tasks concurrently =====
+-- Run both tasks
 parallel.waitForAny(pidTask, inputTask)
