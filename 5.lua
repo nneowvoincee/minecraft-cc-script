@@ -128,12 +128,13 @@ local function controlTask()
             local current_kinetic = v*v/2
             local required_potential = GRAVITY* error
             local final_required_kinetic = 0
+
             if (v_up <= 0) then
                 current_kinetic = -current_kinetic
             end
-            final_required_kinetic = required_potential - current_kinetic
+            final_required_kinetic = required_potential*DELTA - current_kinetic
 
-            local target_acc = final_required_kinetic*DELTA / math.abs(error)
+            local target_acc = final_required_kinetic / math.abs(error)
 
             local airPressure = getAirPressure()
             local ratio = (target_acc + GRAVITY) / (MAX_ACC_UP* airPressure)
