@@ -30,6 +30,24 @@ if not velSensor then error("Velocity sensor not found on right", 0) end
 local targetHeight = 100
 
 -- ==============================================
+-- 辅助函数：获取高度、速度、气压
+-- ==============================================
+local function getHeight()
+    local h = heightSensor.getHeight()
+    return (type(h) == "number") and h or nil
+end
+
+local function getVelocity()
+    local v = velSensor.getVelocity()
+    return (type(v) == "number") and v or nil
+end
+
+local function getAirPressure()
+    local p = heightSensor.getAirPressure()
+    return (type(p) == "number") and p or 1.0   -- 默认 1.0
+end
+
+-- ==============================================
 -- PID 控制器（速度环）
 -- ==============================================
 local Pid = {}
@@ -84,25 +102,6 @@ function Pid.createPid(kp, ki, kd, tick, initial_acc, i_limit)
 end
 
 local control = Pid.createPid(KP, KI, KD, TICK, 0.0, I_LIMIT)
-
--- ==============================================
--- 辅助函数：获取高度、速度、气压
--- ==============================================
-local function getHeight()
-    local h = heightSensor.getHeight()
-    return (type(h) == "number") and h or nil
-end
-
-local function getVelocity()
-    local v = velSensor.getVelocity()
-    return (type(v) == "number") and v or nil
-end
-
-local function getAirPressure()
-    local p = heightSensor.getAirPressure()
-    return (type(p) == "number") and p or 1.0   -- 默认 1.0
-end
-
 
 -- ==============================================
 -- 主控制循环
