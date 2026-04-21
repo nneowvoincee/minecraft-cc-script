@@ -57,14 +57,12 @@ end
 
 local currentHeight = getSafeHeight()
 if currentHeight == nil then
-    -- Fallback: assume we are at target to avoid wild guess
     currentHeight = targetHeight
     print("Warning: Could not read initial height. Assuming target height.")
 end
 
 -- Estimate initial PID output based on error
 local initialError = targetHeight - currentHeight
--- Simple linear mapping: error of -15 to +15 maps to output 0 to 15
 local initialU = math.max(0, math.min(15, (initialError * 0.5) + 7.5))
 
 local control = Pid.createPid(KP, KI, KD, TICK, initialU)
@@ -73,26 +71,19 @@ local control = Pid.createPid(KP, KI, KD, TICK, initialU)
 local function pidTask()
     while true do
         local h = getSafeHeight()
-        if h == nil then
-            -- Sensor unavailable; skip this cycle
-            sleep(TICK)
-            goto continue
+        if h ~= nil then
+            local error = targetHeight - h
+            local output = control:step(error)
+
+            -- Clamp and round to integer
+            output = math.floor(output + 0.5)
+            if output > 15 then output = 15
+            elseif output < 0 then output = 0 end
+
+            -- Invert for this specific thruster: 0 = full pull, 15 = off
+            local invertedOutput = 15 - output
+            redstone.setAnalogOutput("bottom", invertedOutput)
         end
-
-        local error = targetHeight - h
-        local output = control:step(error)
-
-        -- Clamp and round to integer
-        output = math.floor(output + 0.5)
-        if output > 15 then output = 15
-        elseif output < 0 then output = 0 end
-
-        -- Invert for this specific thruster: 0 = full pull, 15 = off
-        local invertedOutput = 15 - output
-
-        redstone.setAnalogOutput("bottom", invertedOutput)
-
-        ::continue::
         sleep(TICK)
     end
 end
