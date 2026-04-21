@@ -124,12 +124,12 @@ local function controlTask()
         else
             -- ===== 物理预测制动区 =====
             local current_kinetic = v*v/2
-            local required_potential = GRAVITY*error
+            local required_potential = GRAVITY* math.abs(error)
             local final_required_kinetic = 0
             if (v*error <= 0) then  -- 同向
-                final_required_kinetic = required_potential - current_kinetic
-            else
                 final_required_kinetic = required_potential + current_kinetic
+            else
+                final_required_kinetic = required_potential - current_kinetic
             end
 
             local target_acc = final_required_kinetic*DELTA / math.abs(error)
