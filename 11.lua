@@ -8,7 +8,7 @@ local MAX_ACC_UP = FAN_FORCE_UP/MASS
 -- 下降时没有反向推力，仅靠重力，所以下降方向最大净力 = MASS * GRAVITY
 
 -- 控制参数
-DELTA = 15   -- 数字越大，初期加速越快，但可能会冲过头
+local DELTA = 15   -- 数字越大，初期加速越快，但可能会冲过头
 
 local ZONE = 10.0             -- 距离目标多少格内启用精细控制
 local TICK = 0.1
@@ -59,26 +59,28 @@ local function controlTask()
         local output, target_acc
 
         if math.abs(error) <= ZONE then
-            -- ===== 物理预测制动区 =====
-            local current_kinetic = v*v/2
-            local required_potential = GRAVITY* error
-            local final_required_kinetic = 0
+             local v_abs = math.abs(v_up)
 
-            if (v_up <= 0) then
-                current_kinetic = -current_kinetic
-            end
-            final_required_kinetic = required_potential - current_kinetic
-            local temp = math.sqrt(v_up*v_up + 2*math.abs(final_required_kinetic))
-
-            local a1 = (v_up + temp) / TICK
-            local a2 = (v_up - temp) / TICK
-            local s1 = v_up*TICK + 0.5 * a1 * TICK * TICK
-            local s2 = v_up*TICK + 0.5 * a2 * TICK * TICK
-
-            if math.abs(s1 - error) < math.abs(s2 - error) then
-                target_acc = s1
+            -- 1. 几乎静止，直接保持
+            if v_abs < 0.01 then
+                target_acc = 0
             else
-                target_acc = s2
+                -- 2. 计算在当前速度下，匀减速至零所需净加速度（理论值）
+                local a_brake = -0.5 * v_up * v_abs / error   -- 保持符号正确
+
+                -- 3. 限幅到推力可实现的净加速度范围
+                local max_up_net = MAX_ACC_UP - GRAVITY   -- 最大向上净加速度
+                local max_down_net = -GRAVITY             -- 最大向下净加速度（自由落体）
+
+                -- 4. 方向检查：如果计算出的制动加速度方向与所需方向一致且不超过限幅，则采用
+                --    否则，如果正在远离目标，则用最大推力朝向目标
+                if error * v_up > 0 then
+                    -- 正在朝向目标移动，使用制动加速度并限幅
+                    target_acc = math.max(max_down_net, math.min(max_up_net, a_brake))
+                else
+                    -- 正在远离目标，全力朝目标方向加速
+                    target_acc = (error > 0) and max_up_net or max_down_net
+                end
             end
 
         else
