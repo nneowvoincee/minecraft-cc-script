@@ -1,5 +1,5 @@
 -- ==============================================
--- PID with Dead Zone + Open-Loop Boost
+-- PID Controller with Velocity Feedforward
 -- ==============================================
 local Pid = {}
 
@@ -49,56 +49,75 @@ end
 -- ==============================================
 -- Main Program
 -- ==============================================
-local sensor = peripheral.wrap("top")
-if not sensor then error("Height sensor not found on top", 0) end
+local heightSensor = peripheral.wrap("top")
+local velSensor = peripheral.wrap("right")
 
-local KP, KI, KD = 2.0, 0.1, 1.0   -- PID 仅在小误差区使用，可相对温和
+if not heightSensor then error("Height sensor not found on top", 0) end
+if not velSensor then error("Velocity sensor not found on right", 0) end
+
+-- 控制参数
+local KP, KI, KD = 3.0, 0.15, 1.5   -- 速度环 PID
 local TICK = 0.1
-local I_LIMIT = 6.0
+local I_LIMIT = 10.0
 
 local targetHeight = 100
-local deadZone = 30.0               -- 大误差阈值（可调）
+
+-- 速度规划参数
+local maxSpeed = 5.0        -- 最大允许速度 (m/s)
+local decelDist = 15.0      -- 开始减速的距离 (m)
 
 local function getSafeHeight()
-    local h = sensor.getHeight()
+    local h = heightSensor.getHeight()
     return (type(h) == "number") and h or nil
 end
 
-local currentHeight = getSafeHeight() or targetHeight
-local initialError = targetHeight - currentHeight
-local initialU = math.max(0, math.min(15, (initialError * 0.5) + 7.5))
+local function getSpeed()
+    local raw = velSensor.getVelocity()
+    if type(raw) == "number" then
+        return -raw / 10.0   -- 向上为正
+    else
+        return nil
+    end
+end
+
+-- 初始化 PID（基于初始速度误差为0，但也可以基于初始推力估计）
+local initialU = 7.5   -- 中等推力起步
 local control = Pid.createPid(KP, KI, KD, TICK, initialU, I_LIMIT)
 
--- PID 任务（死区 + 开环）
+-- ===== PID 任务（速度环） =====
 local function pidTask()
     while true do
         local h = getSafeHeight()
-        if h ~= nil then
+        local v = getSpeed()
+
+        if h ~= nil and v ~= nil then
             local error = targetHeight - h
 
+            -- 计算期望速度（梯形曲线）
+            local targetSpeed
+            local absErr = math.abs(error)
+            if absErr > decelDist then
+                targetSpeed = (error > 0) and maxSpeed or -maxSpeed
+            else
+                targetSpeed = (error / decelDist) * maxSpeed
+            end
+
+            local speedError = targetSpeed - v
+
+            -- 调试显示
             term.setCursorPos(1, 5)
             term.clearLine()
-            term.write(string.format("H:%6.1f T:%6.1f Err:%6.1f u:%5.1f I:%5.1f",
-                h, targetHeight, error, control.u, control.i_accum))
+            term.write(string.format("H:%6.1f T:%6.1f V:%5.2f TV:%5.2f ErrV:%5.2f u:%5.1f",
+                h, targetHeight, v, targetSpeed, speedError, control.u))
 
-            if error > deadZone then
-                -- 大幅上升：满推力
-                control.u = 15
-                control.i_accum = 0
-                redstone.setAnalogOutput("bottom", 0)
-            elseif error < -deadZone then
-                -- 大幅下降：零推力
-                control.u = 0
-                control.i_accum = 0
-                redstone.setAnalogOutput("bottom", 15)
-            else
-                -- 小误差区：PID 精细调节
-                local output = control:step(error)
-                output = math.floor(output + 0.5)
-                if output > 15 then output = 15
-                elseif output < 0 then output = 0 end
-                redstone.setAnalogOutput("bottom", 15 - output)
-            end
+            -- 速度 PID 计算推力
+            local output = control:step(speedError)
+            output = math.floor(output + 0.5)
+            if output > 15 then output = 15
+            elseif output < 0 then output = 0 end
+
+            -- 输出（注意反转）
+            redstone.setAnalogOutput("bottom", 15 - output)
         else
             term.setCursorPos(1, 5)
             term.write("Sensor offline, waiting...")
@@ -107,10 +126,10 @@ local function pidTask()
     end
 end
 
--- 输入任务
+-- ===== 输入任务 =====
 local function inputTask()
     term.setTextColor(colors.yellow)
-    print("PID Altitude Hold (Dead Zone + Boost)")
+    print("Velocity-based PID Altitude Hold")
     print("Target: " .. targetHeight)
     print("Enter new target (>= -64):")
     term.setTextColor(colors.white)
