@@ -8,6 +8,8 @@ local MAX_ACC_UP = FAN_FORCE_UP/MASS
 -- 下降时没有反向推力，仅靠重力，所以下降方向最大净力 = MASS * GRAVITY
 
 -- 控制参数
+DELTA = 4   -- 数字越大，初期加速越快，但可能会冲过头
+
 local PID_ZONE = 20.0             -- 距离目标多少格内启用 PID 精细控制
 MAX_CRUISE_SPEED = 200
 
@@ -121,7 +123,16 @@ local function controlTask()
             elseif output < 0 then output = 0 end
         else
             -- ===== 物理预测制动区 =====
-            local target_acc = v*v / (2 * error*11)
+            local current_kinetic = v*v/2
+            local required_potential = GRAVITY*error
+            local final_required_kinetic = 0
+            if (v*error <= 0) then  -- 同向
+                final_required_kinetic = required_potential - current_kinetic
+            else
+                final_required_kinetic = required_potential + current_kinetic
+            end
+
+            local target_acc = final_required_kinetic*DELTA / math.abs(error)
 
             local airPressure = getAirPressure()
             local ratio = (target_acc + GRAVITY) / (MAX_ACC_UP* airPressure)
