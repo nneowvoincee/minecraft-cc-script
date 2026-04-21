@@ -1,8 +1,8 @@
 -- ==============================================
 -- 物理参数 —— 请根据你的飞行器填写
 -- ==============================================
-local FAN_FORCE_UP = 40480.0        -- 风扇满推力时向上的力（牛顿）
-local MASS = 6130                 -- 飞行器质量（kg）
+local FAN_FORCE_UP = 11051.0        -- 风扇满推力时向上的力（牛顿）
+local MASS = 886                 -- 飞行器质量（kg）
 local GRAVITY = 11        -- 重力加速度（m/s²），通常无需改动
 local MAX_ACC_UP = FAN_FORCE_UP/MASS
 -- 下降时没有反向推力，仅靠重力，所以下降方向最大净力 = MASS * GRAVITY
@@ -59,28 +59,26 @@ local function controlTask()
         local output, target_acc
 
         if math.abs(error) <= ZONE then
-             local v_abs = math.abs(v_up)
+            -- ===== 物理预测制动区 =====
+            local current_kinetic = v*v/2
+            local required_potential = GRAVITY* error
+            local final_required_kinetic = 0
 
-            -- 1. 几乎静止，直接保持
-            if v_abs < 0.01 then
-                target_acc = 0
+            if (v_up <= 0) then
+                current_kinetic = -current_kinetic
+            end
+            final_required_kinetic = required_potential - current_kinetic
+            local temp = math.sqrt(v_up*v_up + 2*math.abs(final_required_kinetic))
+
+            local a1 = (v_up + temp) / TICK
+            local a2 = (v_up - temp) / TICK
+            local s1 = v_up*TICK + 0.5 * a1 * TICK * TICK
+            local s2 = v_up*TICK + 0.5 * a2 * TICK * TICK
+
+            if math.abs(s1 - error) < math.abs(s2 - error) then
+                target_acc = s1
             else
-                -- 2. 计算在当前速度下，匀减速至零所需净加速度（理论值）
-                local a_brake = -0.5 * v_up * v_abs / error   -- 保持符号正确
-
-                -- 3. 限幅到推力可实现的净加速度范围
-                local max_up_net = MAX_ACC_UP - GRAVITY   -- 最大向上净加速度
-                local max_down_net = -GRAVITY             -- 最大向下净加速度（自由落体）
-
-                -- 4. 方向检查：如果计算出的制动加速度方向与所需方向一致且不超过限幅，则采用
-                --    否则，如果正在远离目标，则用最大推力朝向目标
-                if error * v_up > 0 then
-                    -- 正在朝向目标移动，使用制动加速度并限幅
-                    target_acc = math.max(max_down_net, math.min(max_up_net, a_brake))
-                else
-                    -- 正在远离目标，全力朝目标方向加速
-                    target_acc = (error > 0) and max_up_net or max_down_net
-                end
+                target_acc = s2
             end
 
         else
