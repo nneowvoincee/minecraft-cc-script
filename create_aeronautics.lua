@@ -1,5 +1,5 @@
 -- ==============================================
--- PID Controller with Velocity Feedforward
+-- PID Controller with Kinematic Braking
 -- ==============================================
 local Pid = {}
 
@@ -55,16 +55,20 @@ local velSensor = peripheral.wrap("right")
 if not heightSensor then error("Height sensor not found on top", 0) end
 if not velSensor then error("Velocity sensor not found on right", 0) end
 
--- 控制参数
-local KP, KI, KD = 3.0, 0.15, 1.5   -- 速度环 PID
+-- 物理参数（需要根据实际飞行器校准）
+local maxThrustAccel = 4.0    -- 最大推力时的加速度 (m/s²) 向上
+local gravityAccel = 9.8       -- 重力加速度 (m/s²)
+local maxUpAccel = maxThrustAccel - gravityAccel
+local maxDownAccel = gravityAccel
+
+local maxSpeed = 15           -- 最大巡航速度 (m/s)
+
+-- PID 参数（速度环）
+local KP, KI, KD = 2.5, 0.15, 1.0
 local TICK = 0.1
 local I_LIMIT = 10.0
 
 local targetHeight = 100
-
--- 速度规划参数
-local maxSpeed = 5.0        -- 最大允许速度 (m/s)
-local decelDist = 15.0      -- 开始减速的距离 (m)
 
 local function getSafeHeight()
     local h = heightSensor.getHeight()
@@ -80,11 +84,10 @@ local function getSpeed()
     end
 end
 
--- 初始化 PID（基于初始速度误差为0，但也可以基于初始推力估计）
-local initialU = 7.5   -- 中等推力起步
+local initialU = 7.5
 local control = Pid.createPid(KP, KI, KD, TICK, initialU, I_LIMIT)
 
--- ===== PID 任务（速度环） =====
+-- ===== PID 任务（带运动学制动） =====
 local function pidTask()
     while true do
         local h = getSafeHeight()
@@ -93,13 +96,35 @@ local function pidTask()
         if h ~= nil and v ~= nil then
             local error = targetHeight - h
 
-            -- 计算期望速度（梯形曲线）
             local targetSpeed
-            local absErr = math.abs(error)
-            if absErr > decelDist then
-                targetSpeed = (error > 0) and maxSpeed or -maxSpeed
+
+            if error > 0 then
+                -- 需要向上运动
+                -- 计算从当前速度 v 制动到 0 所需的距离（仅当 v > 0 时有效）
+                local brakeDist = 0
+                if v > 0 then
+                    brakeDist = (v * v) / (2 * maxUpAccel)
+                end
+                if error <= brakeDist then
+                    -- 进入减速区，期望速度按 sqrt(2*a*d) 计算，且不超过当前速度（避免瞬间跳变）
+                    targetSpeed = math.sqrt(2 * maxUpAccel * error)
+                    if targetSpeed > v then targetSpeed = v end   -- 防止计算误差导致加速
+                else
+                    targetSpeed = maxSpeed
+                end
             else
-                targetSpeed = (error / decelDist) * maxSpeed
+                -- 需要向下运动
+                local absErr = -error
+                local brakeDist = 0
+                if v < 0 then
+                    brakeDist = (v * v) / (2 * maxDownAccel)
+                end
+                if absErr <= brakeDist then
+                    targetSpeed = -math.sqrt(2 * maxDownAccel * absErr)
+                    if targetSpeed < v then targetSpeed = v end
+                else
+                    targetSpeed = -maxSpeed
+                end
             end
 
             local speedError = targetSpeed - v
@@ -110,13 +135,11 @@ local function pidTask()
             term.write(string.format("H:%6.1f T:%6.1f V:%5.2f TV:%5.2f ErrV:%5.2f u:%5.1f",
                 h, targetHeight, v, targetSpeed, speedError, control.u))
 
-            -- 速度 PID 计算推力
             local output = control:step(speedError)
             output = math.floor(output + 0.5)
             if output > 15 then output = 15
             elseif output < 0 then output = 0 end
 
-            -- 输出（注意反转）
             redstone.setAnalogOutput("bottom", 15 - output)
         else
             term.setCursorPos(1, 5)
@@ -129,7 +152,7 @@ end
 -- ===== 输入任务 =====
 local function inputTask()
     term.setTextColor(colors.yellow)
-    print("Velocity-based PID Altitude Hold")
+    print("Kinematic Braking Altitude Hold")
     print("Target: " .. targetHeight)
     print("Enter new target (>= -64):")
     term.setTextColor(colors.white)
