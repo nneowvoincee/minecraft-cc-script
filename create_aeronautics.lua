@@ -6,10 +6,9 @@ local Pid = {}
 function Pid.createPid(kp, ki, kd, tick, initial_u)
     local pid = {
         k = 0,
-        u = initial_u or 0,   -- avoid nil initial output
+        u = initial_u or 0,
         e = {},
     }
-
     function pid:step(err)
         self.e[self.k] = err
         if self.k == 0 then
@@ -23,121 +22,67 @@ function Pid.createPid(kp, ki, kd, tick, initial_u)
         self.k = self.k + 1
         return self.u
     end
-
     return pid
 end
 
 -- ==============================================
--- Main Program: Altitude Hold with Live Input
+-- Main Program
 -- ==============================================
-
--- 1. Hardware initialization
 local sensor = peripheral.wrap("top")
 if not sensor then
     error("Height sensor not found on top", 0)
 end
 
--- 2. PID parameters (tune as needed)
 local KP, KI, KD = 1.0, 0.017, 2.0
-local TICK = 0.1   -- control loop interval in seconds
+local TICK = 0.1   -- control interval in seconds
 
--- 3. Initial target height (must be >= -64)
+-- Shared variable for target height (can be updated by input task)
 local targetHeight = 100
 
--- Read current redstone output for bumpless PID start
+-- Initialize PID with current redstone output (bumpless start)
 local startPower = redstone.getAnalogOutput("right") or 0
 local control = Pid.createPid(KP, KI, KD, TICK, startPower)
 
--- 4. Prepare terminal display
-term.clear()
-term.setCursorPos(1, 1)
-term.setCursorBlink(true)
-
--- Input buffer
-local inputBuffer = ""
-local inputPrompt = ">>> Enter new target (>= -64): "
-
--- Function to refresh the fixed three lines
-local function updateScreen(currentHeight)
-    term.setCursorPos(1, 1)
-    term.clearLine()
-    print("Target Height: " .. targetHeight .. " m")
-
-    term.setCursorPos(1, 2)
-    term.clearLine()
-    print("Current Height: " .. currentHeight .. " m")
-
-    term.setCursorPos(1, 3)
-    term.clearLine()
-    write(inputPrompt .. inputBuffer)
-end
-
--- Initial display
-local currentHeight = sensor.getHeight()
-updateScreen(currentHeight)
-
--- 5. Start periodic timer for PID loop
-local timerID = os.startTimer(TICK)
-
--- 6. Main event loop
-while true do
-    local event, p1, p2, p3 = os.pullEventRaw()
-
-    if event == "timer" and p1 == timerID then
-        -- ========== Timer: run PID control ==========
-        timerID = os.startTimer(TICK)
-
-        currentHeight = sensor.getHeight()
+-- ===== Task 1: Background PID control loop =====
+local function pidTask()
+    while true do
+        local currentHeight = sensor.getHeight()
         local error = targetHeight - currentHeight
         local output = control:step(error)
 
-        -- Clamp to analog redstone range [0, 15]
+        -- Clamp to [0, 15]
         if output > 15 then output = 15
         elseif output < 0 then output = 0 end
         output = math.floor(output + 0.5)
 
         redstone.setAnalogOutput("right", output)
-        updateScreen(currentHeight)
 
-    elseif event == "key" then
-        -- ========== Keyboard input ==========
-        local key = p1
-        if key == keys.enter then
-            local newTarget = tonumber(inputBuffer)
-            if newTarget and newTarget >= -64 then
-                targetHeight = newTarget
-            end
-            inputBuffer = ""
-            updateScreen(currentHeight)
-
-        elseif key == keys.backspace then
-            if #inputBuffer > 0 then
-                inputBuffer = inputBuffer:sub(1, -2)
-                updateScreen(currentHeight)
-            end
-
-        elseif key == keys.delete then
-            inputBuffer = ""
-            updateScreen(currentHeight)
-
-        else
-            local char = keys.getName(key)
-            -- Allow digits, minus, decimal point
-            if char and char:match("^[%d%-%.]$") then
-                if char == "-" and #inputBuffer == 0 then
-                    inputBuffer = inputBuffer .. char
-                elseif char:match("%d") or char == "." then
-                    inputBuffer = inputBuffer .. char
-                end
-                updateScreen(currentHeight)
-            end
-        end
-
-    elseif event == "terminate" then
-        term.clear()
-        term.setCursorPos(1, 1)
-        term.setCursorBlink(false)
-        print("Program terminated.")
-        break
+        -- Sleep to maintain control frequency
+        sleep(TICK)
     end
 end
+
+-- ===== Task 2: Command line input =====
+local function inputTask()
+    term.setTextColor(colors.yellow)
+    print("PID Altitude Hold Active")
+    print("Current target: " .. targetHeight)
+    print("Enter a new target height (>= -64) and press Enter.")
+    print("-------------------------------------------")
+    term.setTextColor(colors.white)
+
+    while true do
+        write("New target: ")
+        local input = read()   -- Blocking read, but parallel handles it
+        local newTarget = tonumber(input)
+        if newTarget and newTarget >= -64 then
+            targetHeight = newTarget
+            print("Target updated to " .. targetHeight .. " m")
+        else
+            print("Invalid input. Must be a number >= -64.")
+        end
+    end
+end
+
+-- ===== Run both tasks concurrently =====
+parallel.waitForAny(pidTask, inputTask)
