@@ -140,7 +140,6 @@ local function controlTask()
 
             if output > 15 then output = 15
             elseif output < 0 then output = 0 end
-            output = 15 - output
             term.setCursorPos(1, 5)
             term.clearLine()
             term.write(string.format("tar_acc:%2.1f,k:%2.1f,r:%2.2f,o:%2d,E:%2d\n",
