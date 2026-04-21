@@ -133,11 +133,6 @@ local function controlTask()
 
             term.setCursorPos(1, 5)
             term.clearLine()
-            term.clearLine()
-            term.clearLine()
-            term.clearLine()
-            --term.write(string.format("H:%6.1f T:%6.1f V:%5.2f Err:%6.1f Out:%2d\n",
-            --h, targetHeight, v, error, output))
             term.write(string.format("tar_acc:%6.1f P:%5.2f Ra:%5.2f Out:%2d,\n",
             target_acc, airPressure, ratio, output))
 
