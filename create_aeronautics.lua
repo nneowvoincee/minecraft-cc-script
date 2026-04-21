@@ -110,7 +110,7 @@ local function controlTask()
 
         local output
 
-        if math.abs(error) <= PID_ZONE then
+        if math.abs(error) <= PID_ZONE and false then
             -- ===== PID 精细区 =====
             -- 计算期望速度（线性减速至0）
             local targetSpeed = (error / PID_ZONE) * MAX_CRUISE_SPEED
