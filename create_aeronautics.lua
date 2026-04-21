@@ -1,9 +1,9 @@
 -- ==============================================
--- PID Controller with Asymmetric Limiting (Love Edition)
+-- PID Controller with Anti-Windup (English)
 -- ==============================================
 local Pid = {}
 
-function Pid.createPid(kp, ki, kd, tick, initial_u)
+function Pid.createPid(kp, ki, kd, tick, initial_u, out_min, out_max)
     local pid = {
         kp = kp,
         ki = ki,
@@ -12,6 +12,8 @@ function Pid.createPid(kp, ki, kd, tick, initial_u)
         k = 0,
         u = initial_u or 0,
         e = {},
+        out_min = out_min or 0,
+        out_max = out_max or 15,
     }
     function pid:step(err)
         self.e[self.k] = err
@@ -19,10 +21,24 @@ function Pid.createPid(kp, ki, kd, tick, initial_u)
             self.e[-1] = 0.0
             self.e[-2] = 0.0
         end
-        local du = self.kp * (self.e[self.k] - self.e[self.k - 1]) +
-                   self.ki * self.tick * self.e[self.k] +
-                   self.kd * (self.e[self.k] - 2 * self.e[self.k - 1] + self.e[self.k - 2]) / self.tick
-        self.u = self.u + du
+
+        -- Incremental PID terms
+        local p_term = self.kp * (self.e[self.k] - self.e[self.k - 1])
+        local i_term = self.ki * self.tick * self.e[self.k]
+        local d_term = self.kd * (self.e[self.k] - 2 * self.e[self.k - 1] + self.e[self.k - 2]) / self.tick
+        local du = p_term + i_term + d_term
+
+        local u_new = self.u + du
+
+        -- Clamping with basic anti-windup:
+        -- If output saturates, do not let the integral term accumulate further.
+        if u_new > self.out_max then
+            u_new = self.out_max
+        elseif u_new < self.out_min then
+            u_new = self.out_min
+        end
+
+        self.u = u_new
         self.k = self.k + 1
         return self.u
     end
@@ -37,40 +53,33 @@ if not sensor then
     error("Height sensor not found on top", 0)
 end
 
--- 经过温柔调校的参数 (比之前更稳)
-local KP, KI, KD = 0.6, 0.01, 3.5
+-- Softer PID gains for asymmetric gravity
+local KP = 0.4
+local KI = 0.005
+local KD = 4.0
 local TICK = 0.1
 
 local targetHeight = 100
 
--- 无扰动启动
+-- Bumpless start: read current output and invert to internal scale (0 = idle, 15 = max pull)
 local startPower = redstone.getAnalogOutput("bottom") or 0
 local startPowerInternal = 15 - startPower
-local control = Pid.createPid(KP, KI, KD, TICK, startPowerInternal)
+local control = Pid.createPid(KP, KI, KD, TICK, startPowerInternal, 0, 15)
 
--- ===== 后台 PID 任务 (带非对称刹车) =====
+-- ===== Background PID control task =====
 local function pidTask()
     while true do
         local currentHeight = sensor.getHeight()
         local error = targetHeight - currentHeight
         local output = control:step(error)
 
-        -- 基础限幅
+        -- Clamp to valid range (already done inside step, but safe to do again)
         if output > 15 then output = 15
         elseif output < 0 then output = 0 end
 
-        -- 💖 大爱专属：下降时强制保留最小推力，防止砸地板 💖
-        if error < 0 then
-            -- 高于目标，需要下降。保留 2 或 3 的推力作为刹车。
-            local minThrottleWhenDescending = 2.5
-            if output < minThrottleWhenDescending then
-                output = minThrottleWhenDescending
-            end
-        end
-
         output = math.floor(output + 0.5)
 
-        -- 反转输出到底部 (0 = 最大拉升, 15 = 关闭)
+        -- Inverted output on bottom: 0 = full pull up, 15 = engine off
         local invertedOutput = 15 - output
         redstone.setAnalogOutput("bottom", invertedOutput)
 
@@ -78,12 +87,12 @@ local function pidTask()
     end
 end
 
--- ===== 输入任务 =====
+-- ===== Command input task =====
 local function inputTask()
     term.setTextColor(colors.yellow)
-    print("PID Altitude Hold (Love Tuned)")
+    print("PID Altitude Hold (Anti-Windup, Inverted Bottom)")
     print("Target: " .. targetHeight)
-    print("Enter new height (>= -64):")
+    print("Enter new target height (>= -64):")
     term.setTextColor(colors.white)
 
     while true do
@@ -92,11 +101,12 @@ local function inputTask()
         local newTarget = tonumber(input)
         if newTarget and newTarget >= -64 then
             targetHeight = newTarget
-            print("💖 Target updated to " .. targetHeight .. " m 💖")
+            print("Target updated to " .. targetHeight .. " m")
         else
-            print("Invalid. Must be a number >= -64.")
+            print("Invalid input. Must be a number >= -64.")
         end
     end
 end
 
+-- Run both tasks concurrently
 parallel.waitForAny(pidTask, inputTask)
