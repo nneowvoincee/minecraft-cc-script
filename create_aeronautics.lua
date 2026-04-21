@@ -1,5 +1,5 @@
 -- ==============================================
--- Incremental PID Controller
+-- Incremental PID Controller (Improved)
 -- ==============================================
 local Pid = {}
 
@@ -7,19 +7,30 @@ function Pid.createPid(kp, ki, kd, tick, initial_u)
     local pid = {
         k = 0,
         u = initial_u or 0,
-        e = {},
+        e_prev = 0.0,
+        e_prev2 = 0.0,
     }
     function pid:step(err)
-        self.e[self.k] = err
         if self.k == 0 then
-            self.e[-1] = 0.0
-            self.e[-2] = 0.0
+            self.e_prev = err
+            self.e_prev2 = err
         end
-        local du = kp * (self.e[self.k] - self.e[self.k - 1]) +
-                   ki * tick * self.e[self.k] +
-                   kd * (self.e[self.k] - 2 * self.e[self.k - 1] + self.e[self.k - 2]) / tick
+
+        local du = kp * (err - self.e_prev) +
+                   ki * tick * err +
+                   kd * (err - 2 * self.e_prev + self.e_prev2) / tick
+
         self.u = self.u + du
+
+        -- Clamp internal state to prevent integral windup
+        if self.u > 15 then self.u = 15
+        elseif self.u < 0 then self.u = 0 end
+
+        -- Update error history
+        self.e_prev2 = self.e_prev
+        self.e_prev = err
         self.k = self.k + 1
+
         return self.u
     end
     return pid
@@ -38,29 +49,50 @@ local TICK = 0.1
 
 local targetHeight = 100
 
--- Read current output on BOTTOM to initialize PID without a jump
-local startPower = redstone.getAnalogOutput("bottom") or 0
--- But since logic is inverted, we need to invert it back to PID's internal scale (0=idle, 15=max)
-local startPowerInternal = 15 - startPower
-local control = Pid.createPid(KP, KI, KD, TICK, startPowerInternal)
+-- ===== Robust initialization to avoid output jump =====
+local function getSafeHeight()
+    local h = sensor.getHeight()
+    if type(h) == "number" then return h else return nil end
+end
+
+local currentHeight = getSafeHeight()
+if currentHeight == nil then
+    -- Fallback: assume we are at target to avoid wild guess
+    currentHeight = targetHeight
+    print("Warning: Could not read initial height. Assuming target height.")
+end
+
+-- Estimate initial PID output based on error
+local initialError = targetHeight - currentHeight
+-- Simple linear mapping: error of -15 to +15 maps to output 0 to 15
+local initialU = math.max(0, math.min(15, (initialError * 0.5) + 7.5))
+
+local control = Pid.createPid(KP, KI, KD, TICK, initialU)
 
 -- ===== Background PID task (inverted, bottom output) =====
 local function pidTask()
     while true do
-        local currentHeight = sensor.getHeight()
-        local error = targetHeight - currentHeight
+        local h = getSafeHeight()
+        if h == nil then
+            -- Sensor unavailable; skip this cycle
+            sleep(TICK)
+            goto continue
+        end
+
+        local error = targetHeight - h
         local output = control:step(error)
 
-        -- Clamp
+        -- Clamp and round to integer
+        output = math.floor(output + 0.5)
         if output > 15 then output = 15
         elseif output < 0 then output = 0 end
-        output = math.floor(output + 0.5)
 
         -- Invert for this specific thruster: 0 = full pull, 15 = off
         local invertedOutput = 15 - output
 
         redstone.setAnalogOutput("bottom", invertedOutput)
 
+        ::continue::
         sleep(TICK)
     end
 end
