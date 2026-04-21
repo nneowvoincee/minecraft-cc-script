@@ -10,13 +10,8 @@ local MAX_ACC_UP = FAN_FORCE_UP/MASS
 -- 控制参数
 DELTA = 15   -- 数字越大，初期加速越快，但可能会冲过头
 
-local PID_ZONE = 10.0             -- 距离目标多少格内启用 PID 精细控制
-MAX_CRUISE_SPEED = 200
-
--- PID 参数（用于速度环）
-local KP, KI, KD = 1, 0.07, 1.0
+local ZONE = 10.0             -- 距离目标多少格内启用精细控制
 local TICK = 0.1
-local I_LIMIT = 15.0
 
 -- ==============================================
 -- 初始化传感器
@@ -48,62 +43,6 @@ local function getAirPressure()
 end
 
 -- ==============================================
--- PID 控制器（速度环）
--- ==============================================
-local Pid = {}
-
-function Pid.createPid(kp, ki, kd, tick, initial_acc, i_limit)
-    local pid = {
-        k = 0,
-        u = initial_acc or 0,          -- 现在 u 代表目标净加速度 (m/s²)
-        e_prev = 0.0,
-        e_prev2 = 0.0,
-        i_accum = 0.0,
-        i_limit = i_limit or 5.0,      -- 积分限幅，单位也是加速度
-        d_filtered = 0.0,
-        d_alpha = 0.3,
-    }
-    function pid:step(err)
-        if self.k == 0 then
-            self.e_prev = err
-            self.e_prev2 = err
-            self.i_accum = 0.0
-            self.d_filtered = 0.0
-        end
-
-        local p_term = kp * (err - self.e_prev)
-
-        self.i_accum = self.i_accum + ki * tick * err
-        if self.i_accum > self.i_limit then self.i_accum = self.i_limit
-        elseif self.i_accum < -self.i_limit then self.i_accum = -self.i_limit end
-
-        local raw_d = kd * (err - 2 * self.e_prev + self.e_prev2) / tick
-        self.d_filtered = self.d_alpha * raw_d + (1 - self.d_alpha) * self.d_filtered
-
-        local du = p_term + self.i_accum + self.d_filtered
-
-        self.u = self.u + du
-
-        -- 动态钳位：根据当前气压计算加速度限幅
-        local airPressure = getAirPressure()
-        local max_up_acc = MAX_ACC_UP * airPressure - GRAVITY   -- 最大净向上加速度
-        local min_acc = -GRAVITY                                -- 最大净向下加速度（仅重力）
-
-        if self.u > max_up_acc then self.u = max_up_acc
-        elseif self.u < min_acc then self.u = min_acc end
-
-        self.e_prev2 = self.e_prev
-        self.e_prev = err
-        self.k = self.k + 1
-
-        return self.u   -- 返回净加速度 target_acc
-    end
-    return pid
-end
-
-local control = Pid.createPid(KP, KI, KD, TICK, 0.0, I_LIMIT)
-
--- ==============================================
 -- 主控制循环
 -- ==============================================
 local function controlTask()
@@ -119,15 +58,8 @@ local function controlTask()
 
         local output, target_acc
 
-        if math.abs(error) <= PID_ZONE then
-            ---- ===== PID 精细区 =====
-            ---- 计算期望速度（线性减速至0）
-            --local targetSpeed = (error / PID_ZONE) * MAX_CRUISE_SPEED
-            --local speedError = targetSpeed - v_up   -- 注意：此处应使用向上为正的速度 v_up
-            --
-            ---- PID 输出目标净加速度 target_acc
-            --target_acc = control:step(speedError)
-              -- ===== 物理预测制动区 =====
+        if math.abs(error) <= ZONE then
+            -- ===== 物理预测制动区 =====
             local current_kinetic = v*v/2
             local required_potential = GRAVITY* error
             local final_required_kinetic = 0
@@ -136,9 +68,18 @@ local function controlTask()
                 current_kinetic = -current_kinetic
             end
             final_required_kinetic = required_potential - current_kinetic
-            local s = math.abs(v) * TICK
+            local temp = math.sqrt(v_up*v_up + 2*final_required_kinetic)
 
-            target_acc = final_required_kinetic / s
+            local a1 = (v_up + temp) / TICK
+            local a2 = (v_up - temp) / TICK
+            local s1 = v_up*TICK + 0.5 * a1 * TICK * TICK
+            local s2 = v_up*TICK + 0.5 * a2 * TICK * TICK
+
+            if math.abs(s1 - error) < math.abs(s2 - error) then
+                target_acc = s1
+            else
+                target_acc = s2
+            end
 
         else
             -- ===== 物理预测制动区 =====
