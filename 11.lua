@@ -68,7 +68,7 @@ local function controlTask()
                 current_kinetic = -current_kinetic
             end
             final_required_kinetic = required_potential - current_kinetic
-            local temp = math.sqrt(v_up*v_up + 2*final_required_kinetic)
+            local temp = math.sqrt(v_up*v_up + 2*math.abs(final_required_kinetic))
 
             local a1 = (v_up + temp) / TICK
             local a2 = (v_up - temp) / TICK
