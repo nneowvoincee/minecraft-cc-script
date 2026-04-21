@@ -143,7 +143,7 @@ local function controlTask()
             output = 15 - output
             term.setCursorPos(1, 5)
             term.clearLine()
-            term.write(string.format("tar_acc:%2.1f Rk: %2.1f Ra:%2.2f Out:%2d, Err: %2d\n",
+            term.write(string.format("tar_acc:%2.1f,k:%2.1f,r:%2.2f,o:%2d,E:%2d\n",
             target_acc, final_required_kinetic, ratio, output, error))
 
         end
