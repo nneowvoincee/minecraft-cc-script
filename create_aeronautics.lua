@@ -9,6 +9,7 @@ local MAX_ACC_UP = FAN_FORCE_UP/MASS
 
 -- 控制参数
 local PID_ZONE = 20.0             -- 距离目标多少格内启用 PID 精细控制
+MAX_CRUISE_SPEED = 200
 
 -- PID 参数（用于速度环）
 local KP, KI, KD = 2.5, 0.15, 1.0
@@ -130,16 +131,23 @@ local function controlTask()
             if output > 15 then output = 15
             elseif output < 0 then output = 0 end
 
+            term.setCursorPos(1, 5)
+            term.clearLine()
+            term.write(string.format("H:%6.1f T:%6.1f V:%5.2f Err:%6.1f Out:%2d",
+            h, targetHeight, v, error, output))
+            term.write(string.format("tar_acc:%6.1f P:%5.2f Ra:%5.2f Out:%2d",
+            target_acc, airPressure, ratio, output))
+
         end
 
         -- 输出到螺旋桨（反相）
         redstone.setAnalogOutput("bottom", 15 - output)
 
         -- 调试显示
-        term.setCursorPos(1, 5)
-        term.clearLine()
-        term.write(string.format("H:%6.1f T:%6.1f V:%5.2f Err:%6.1f Out:%2d",
-            h, targetHeight, v, error, output))
+        --term.setCursorPos(1, 5)
+        --term.clearLine()
+        --term.write(string.format("H:%6.1f T:%6.1f V:%5.2f Err:%6.1f Out:%2d",
+        --    h, targetHeight, v, error, output))
 
         sleep(TICK)
     end
