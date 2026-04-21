@@ -8,9 +8,9 @@ local MAX_ACC_UP = FAN_FORCE_UP/MASS
 -- 下降时没有反向推力，仅靠重力，所以下降方向最大净力 = MASS * GRAVITY
 
 -- 控制参数
-DELTA = 2   -- 数字越大，初期加速越快，但可能会冲过头
+DELTA = 15   -- 数字越大，初期加速越快，但可能会冲过头
 
-local PID_ZONE = 20.0             -- 距离目标多少格内启用 PID 精细控制
+local PID_ZONE = 10.0             -- 距离目标多少格内启用 PID 精细控制
 MAX_CRUISE_SPEED = 200
 
 -- PID 参数（用于速度环）
@@ -114,7 +114,7 @@ local function controlTask()
 
         local output
 
-        if math.abs(error) <= PID_ZONE and false then
+        if math.abs(error) <= PID_ZONE then
             -- ===== PID 精细区 =====
             -- 计算期望速度（线性减速至0）
             local targetSpeed = (error / PID_ZONE) * MAX_CRUISE_SPEED
