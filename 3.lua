@@ -8,7 +8,7 @@ local MAX_ACC_UP = FAN_FORCE_UP/MASS
 -- 下降时没有反向推力，仅靠重力，所以下降方向最大净力 = MASS * GRAVITY
 
 -- 控制参数
-DELTA = 4   -- 数字越大，初期加速越快，但可能会冲过头
+DELTA = 2   -- 数字越大，初期加速越快，但可能会冲过头
 
 local PID_ZONE = 20.0             -- 距离目标多少格内启用 PID 精细控制
 MAX_CRUISE_SPEED = 200
@@ -105,6 +105,8 @@ local function controlTask()
     while true do
         local h = getHeight()
         local v = getVelocity()
+        local v_up = -v
+
         if h == nil then h = targetHeight end
         if v == nil then v = 0 end
 
@@ -124,13 +126,12 @@ local function controlTask()
         else
             -- ===== 物理预测制动区 =====
             local current_kinetic = v*v/2
-            local required_potential = GRAVITY* math.abs(error)
+            local required_potential = GRAVITY* error
             local final_required_kinetic = 0
-            if (v*error <= 0) then  -- 同向
-                final_required_kinetic = required_potential + current_kinetic
-            else
-                final_required_kinetic = required_potential - current_kinetic
+            if (v_up <= 0) then
+                current_kinetic = -current_kinetic
             end
+            final_required_kinetic = required_potential - current_kinetic
 
             local target_acc = final_required_kinetic*DELTA / math.abs(error)
 
@@ -147,7 +148,7 @@ local function controlTask()
 
             term.setCursorPos(1, 6)
             term.clearLine()
-            term.write(string.format("E:%2d\n", error))
+            term.write(string.format("v_up:%2d,h:%2d\n", v_up, h))
 
         end
 
