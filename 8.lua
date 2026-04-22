@@ -81,7 +81,8 @@ local function controlTask()
 
             -- 推力修正量 = 速度误差的比例（实际相当于 P-D 串联）
             local correction = KD * vel_error
-
+            local limited_corr = 15 - base_output
+            correction = max(-limited_corr, min(limited_corr, correction))
             -- 合成总推力（前馈 + 修正）
             output = base_output + correction + (error/ZONE)*2
 
