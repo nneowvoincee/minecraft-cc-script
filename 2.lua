@@ -1,8 +1,8 @@
 -- ==============================================
 -- 物理参数 —— 请根据你的飞行器填写
 -- ==============================================
-local FAN_FORCE_UP = 520107.0        -- 风扇满推力时向上的力（牛顿）
-local MASS = 18967                 -- 飞行器质量（kg）
+local FAN_FORCE_UP = 11068.0        -- 风扇满推力时向上的力（牛顿）
+local MASS = 887                 -- 飞行器质量（kg）
 local GRAVITY = 11        -- 重力加速度（m/s²），通常无需改动
 local MAX_ACC_UP = FAN_FORCE_UP/MASS
 -- 下降时没有反向推力，仅靠重力，所以下降方向最大净力 = MASS * GRAVITY
@@ -99,22 +99,24 @@ local function controlTask()
 
         if math.abs(error) <= ZONE then
             if not inFineZone then
-                -- 重置 PID 内部计数器与误差历史
                 control.k = 0
                 control.e = {}
-                -- 将 PID 累积输出初始化为当前实际输出值（保持推力连续）
-                -- 注意：此处输出为 0~15 的推力值，而 redstone 输出是反相的
-                control.u = 15 - redstone.getAnalogOutput("bottom")
+                control.u = 0
+                inFineZone = true
             end
-            inFineZone = true
 
-            output = control:step(error)
-            if output > 15 then
-                output = 15
-            elseif output < 0 then
-                output = 0
-            end
-            output = math.floor(output)
+            -- 计算重力平衡所需的基础推力（范围 0~15）
+            local airPressure = getAirPressure()
+            local base_ratio = GRAVITY / (MAX_ACC_UP * airPressure)
+            local base_output = math.floor(base_ratio * 15 + 0.5)
+
+            -- PID 修正量（范围不限，后续钳位）
+            local pid_correction = control:step(error)
+
+            -- 合成输出
+            local total_output = base_output + pid_correction
+            output = math.max(0, math.min(15, math.floor(total_output + 0.5)))
+
 
         else
             -- ===== 物理预测制动区 =====
