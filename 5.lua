@@ -113,7 +113,7 @@ local function controlTask()
             -- PID 修正量（范围不限，后续钳位）
             local pid_correction = control:step(error)
             local pid_threshold = math.abs(15 - base_output)
-            pid_correction = max(-pid_threshold, min(pid_threshold, pid_correction))    -- map to [-pid_threshold, pid_threshold]
+            pid_correction = math.max(-pid_threshold, math.min(pid_threshold, pid_correction))    -- map to [-pid_threshold, pid_threshold]
             -- 合成输出
             local total_output = base_output + pid_correction
             output = total_output
