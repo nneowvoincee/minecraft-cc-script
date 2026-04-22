@@ -11,9 +11,9 @@ local MAX_ACC_UP = FAN_FORCE_UP/MASS
 local DELTA = 15   -- 数字越大，初期加速越快，但可能会冲过头
 
 -- pid
-local KP, KD = 0.3, 1.2
+local KP, KD = 0.1, 10
 
-local ZONE = 50.0             -- 距离目标多少格内启用精细控制
+local ZONE = 20.0             -- 距离目标多少格内启用精细控制
 local TICK = 0.1
 
 
@@ -83,7 +83,7 @@ local function controlTask()
             local correction = KD * vel_error
 
             -- 合成总推力（前馈 + 修正）
-            output = base_output + correction
+            output = base_output + correction + (error/ZONE)*2
 
              --调试显示
             term.setCursorPos(1, 6)
