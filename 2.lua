@@ -11,7 +11,7 @@ local MAX_ACC_UP = FAN_FORCE_UP/MASS
 local DELTA = 15   -- 数字越大，初期加速越快，但可能会冲过头
 
 -- pid
-local KP, KI, KD = 2, 0, 0
+local KP, KI, KD = 1, 0, 0
 
 local ZONE = 20.0             -- 距离目标多少格内启用精细控制
 local TICK = 0.1
@@ -115,7 +115,11 @@ local function controlTask()
 
             -- 合成输出
             local total_output = base_output + pid_correction
-            output = math.max(0, math.min(15, math.floor(total_output + 0.5)))
+            output = total_output
+            term.setCursorPos(1, 6)
+            term.clearLine()
+            term.write(string.format("base:%6.1f pid:%6.1f",
+            base_output, pid_correction))
 
 
         else
