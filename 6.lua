@@ -11,9 +11,9 @@ local MAX_ACC_UP = FAN_FORCE_UP/MASS
 local DELTA = 15   -- 数字越大，初期加速越快，但可能会冲过头
 
 -- pid
-local KP, KI, KD = 1, 0, 0
+local KP, KD = 0.3, 1.2
 
-local ZONE = 20.0             -- 距离目标多少格内启用精细控制
+local ZONE = 50.0             -- 距离目标多少格内启用精细控制
 local TICK = 0.1
 
 
@@ -46,39 +46,6 @@ local function getAirPressure()
     return (type(p) == "number") and p or 1.0   -- 默认 1.0
 end
 
--- ==============================================
--- pid 控制
--- ==============================================
-
-local Pid = {}
-
-function Pid.createPid(kp, ki, kd, tick, u)
-    local pid = {
-        k = 0,
-        u = u,
-        e = {},
-    }
-
-    function pid:step(err)
-        self.e[self.k] = err
-        if self.k == 0 then
-            self.e[-1] = 0.
-            self.e[-2] = 0.
-        end
-        local du = kp * (self.e[self.k] - self.e[self.k - 1]) + ki * tick * self.e[self.k] +
-            kd * (self.e[self.k] - 2 * self.e[self.k - 1] + self.e[self.k - 2]) / tick
-        self.u = self.u + du
-        self.k = self.k + 1
-        return self.u
-    end
-
-    return pid
-end
-
-local pid = Pid
-local control = pid.createPid(KP, KI, KD, TICK, 15-redstone.getAnalogOutput('bottom'))
-
-
 
 -- ==============================================
 -- 主控制循环
@@ -94,35 +61,35 @@ local function controlTask()
         if v == nil then v = 0 end
 
         local error = targetHeight - h
+        local airPressure = getAirPressure()
 
+        -- 计算悬停所需的基础推力（前馈）
+        local base_ratio = GRAVITY / (MAX_ACC_UP * airPressure)
+        local base_output = base_ratio * 15  -- 浮点数，最后再取整
         local output, target_acc
 
         if math.abs(error) <= ZONE then
+            -- ===== 精细区：PD 阻尼控制 =====
             if not inFineZone then
-                control.k = 0
-                control.e = {}
-                control.u = 0
+                -- 进入精细区，保持输出连续，不清零 PID 历史（使用独立 PD 变量）
                 inFineZone = true
+                lastError = error
             end
 
-            -- 计算重力平衡所需的基础推力（范围 0~15）
-            local airPressure = getAirPressure()
-            local base_ratio = GRAVITY / (MAX_ACC_UP * airPressure)
-            local base_output = math.floor(base_ratio * 15 + 0.5)
+            local desired_vel = KP * error
+            local vel_error = desired_vel - v_up   -- 速度误差
 
-            -- PID 修正量（范围不限，后续钳位）
-            local pid_correction = control:step(error)
-            local pid_threshold = math.abs(15 - base_output)
-            pid_correction = math.max(-pid_threshold, math.min(pid_threshold, pid_correction))    -- map to [-pid_threshold, pid_threshold]
-            -- 合成输出
-            local total_output = base_output + pid_correction
-            output = total_output
+            -- 推力修正量 = 速度误差的比例（实际相当于 P-D 串联）
+            local correction = KD * vel_error
+
+            -- 合成总推力（前馈 + 修正）
+            output = base_output + correction
+
+             --调试显示
             term.setCursorPos(1, 6)
             term.clearLine()
-            term.write(string.format("base:%6.1f pid:%6.1f",
-            base_output, pid_correction))
-
-
+            term.write(string.format("cor:%6.1f",
+                correction))
         else
             -- ===== 物理预测制动区 =====
             local current_kinetic = v*v/2
@@ -138,9 +105,10 @@ local function controlTask()
             target_acc = final_required_kinetic / math.abs(error)
             local airPressure = getAirPressure()
             local ratio = (target_acc + GRAVITY) / (MAX_ACC_UP * airPressure)
-            output = math.floor(ratio * 15 + 0.5)
+            output = ratio * 15
         end
 
+        output = math.floor(output + 0.5)
         if output > 15 then output = 15
         elseif output < 0 then output = 0 end
 
