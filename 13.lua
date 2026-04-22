@@ -10,8 +10,12 @@ local MAX_ACC_UP = FAN_FORCE_UP/MASS
 -- 控制参数
 local DELTA = 15   -- 数字越大，初期加速越快，但可能会冲过头
 
-local ZONE = 10.0             -- 距离目标多少格内启用精细控制
+-- pid
+local KP, KI, KD = 2, 0, 0
+
+local ZONE = 20.0             -- 距离目标多少格内启用精细控制
 local TICK = 0.1
+
 
 -- ==============================================
 -- 初始化传感器
@@ -22,7 +26,7 @@ local velSensor = peripheral.wrap("right")
 if not heightSensor then error("Height sensor not found on top", 0) end
 if not velSensor then error("Velocity sensor not found on right", 0) end
 
-local targetHeight = 100
+local targetHeight = 200
 
 -- ==============================================
 -- 辅助函数：获取高度、速度、气压
@@ -43,6 +47,40 @@ local function getAirPressure()
 end
 
 -- ==============================================
+-- pid 控制
+-- ==============================================
+
+local Pid = {}
+
+function Pid.createPid(kp, ki, kd, tick, u)
+    local pid = {
+        k = 0,
+        u = u,
+        e = {},
+    }
+
+    function pid:step(err)
+        self.e[self.k] = err
+        if self.k == 0 then
+            self.e[-1] = 0.
+            self.e[-2] = 0.
+        end
+        local du = kp * (self.e[self.k] - self.e[self.k - 1]) + ki * tick * self.e[self.k] +
+            kd * (self.e[self.k] - 2 * self.e[self.k - 1] + self.e[self.k - 2]) / tick
+        self.u = self.u + du
+        self.k = self.k + 1
+        return self.u
+    end
+
+    return pid
+end
+
+local pid = Pid
+local control = pid.createPid(KP, KI, KD, TICK, 15-redstone.getAnalogOutput('bottom'))
+
+
+
+-- ==============================================
 -- 主控制循环
 -- ==============================================
 local function controlTask()
@@ -50,6 +88,7 @@ local function controlTask()
         local h = getHeight()
         local v = getVelocity()
         local v_up = -v
+        local inFineZone = false   -- 记录上一周期是否在精细区内
 
         if h == nil then h = targetHeight end
         if v == nil then v = 0 end
@@ -59,33 +98,30 @@ local function controlTask()
         local output, target_acc
 
         if math.abs(error) <= ZONE then
-            -- ===== 物理预测制动区 =====
-            local current_kinetic = v*v/2
-            local required_potential = GRAVITY* error
-            local final_required_kinetic = 0
-
-            if (v_up <= 0) then
-                current_kinetic = -current_kinetic
+            if not inFineZone then
+                -- 重置 PID 内部计数器与误差历史
+                control.k = 0
+                control.e = {}
+                -- 将 PID 累积输出初始化为当前实际输出值（保持推力连续）
+                -- 注意：此处输出为 0~15 的推力值，而 redstone 输出是反相的
+                control.u = 15 - redstone.getAnalogOutput("bottom")
             end
-            final_required_kinetic = required_potential - current_kinetic
-            local temp = math.sqrt(v_up*v_up + 2*math.abs(final_required_kinetic))
+            inFineZone = true
 
-            local a1 = (v_up + temp) / TICK
-            local a2 = (v_up - temp) / TICK
-            local s1 = v_up*TICK + 0.5 * a1 * TICK * TICK
-            local s2 = v_up*TICK + 0.5 * a2 * TICK * TICK
-
-            if math.abs(s1 - error) < math.abs(s2 - error) then
-                target_acc = s1
-            else
-                target_acc = s2
+            output = control:step(error)
+            if output > 15 then
+                output = 15
+            elseif output < 0 then
+                output = 0
             end
+            output = math.floor(output)
 
         else
             -- ===== 物理预测制动区 =====
             local current_kinetic = v*v/2
             local required_potential = GRAVITY* error
             local final_required_kinetic = 0
+            inFineZone = true
 
             if (v_up <= 0) then
                 current_kinetic = -current_kinetic
@@ -93,11 +129,10 @@ local function controlTask()
             final_required_kinetic = required_potential*DELTA - current_kinetic
 
             target_acc = final_required_kinetic / math.abs(error)
+            local airPressure = getAirPressure()
+            local ratio = (target_acc + GRAVITY) / (MAX_ACC_UP * airPressure)
+            output = math.floor(ratio * 15 + 0.5)
         end
-
-        local airPressure = getAirPressure()
-        local ratio = (target_acc + GRAVITY) / (MAX_ACC_UP * airPressure)
-        output = math.floor(ratio * 15 + 0.5)
 
         if output > 15 then output = 15
         elseif output < 0 then output = 0 end
