@@ -1,8 +1,8 @@
 -- ==============================================
 -- 物理参数 —— 请根据你的飞行器填写
 -- ==============================================
-local FAN_FORCE_UP = 11068.0        -- 风扇满推力时向上的力（牛顿）
-local MASS = 887                 -- 飞行器质量（kg）
+local FAN_FORCE_UP = 3732.0        -- 风扇满推力时向上的力（牛顿）
+local MASS = 241                 -- 飞行器质量（kg）
 local GRAVITY = 11        -- 重力加速度（m/s²），通常无需改动
 local MAX_ACC_UP = FAN_FORCE_UP/MASS
 -- 下降时没有反向推力，仅靠重力，所以下降方向最大净力 = MASS * GRAVITY
@@ -11,9 +11,9 @@ local MAX_ACC_UP = FAN_FORCE_UP/MASS
 local DELTA = 15   -- 数字越大，初期加速越快，但可能会冲过头
 
 -- pid
-local KP, KD = 0.1, 10
+local KP, KD = 3, 0.3
 
-local ZONE = 20.0             -- 距离目标多少格内启用精细控制
+local ZONE = 10.0             -- 距离目标多少格内启用精细控制
 local TICK = 0.1
 
 
