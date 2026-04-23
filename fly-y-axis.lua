@@ -1,27 +1,26 @@
 -- ==============================================
--- 物理参数 —— 请根据你的飞行器填写
+-- Physical Parameters -- Please fill according to your aircraft
 -- ==============================================
-local FAN_FORCE_UP = 3732.0        -- 风扇满推力时向上的力（牛顿）
-local MASS = 241                 -- 飞行器质量（kg）
-local GRAVITY = 11        -- 重力加速度（m/s²），通常无需改动
+local FAN_FORCE_UP = 3732.0        -- Upward force at full fan thrust (Newtons)
+local MASS = 241                 -- Aircraft mass (kg)
+local GRAVITY = 11        -- Gravity acceleration (m/s²), usually no need to change
 local MAX_ACC_UP = FAN_FORCE_UP/MASS
--- 下降时没有反向推力，仅靠重力，所以下降方向最大净力 = MASS * GRAVITY
 
--- 控制参数
-local DELTA = 15   -- 数字越大，初期加速越快，但可能会冲过头
+-- Control Parameters
+local DELTA = 15   -- The larger the number, the faster the initial acceleration, but may overshoot
 
--- pid
 local KP, KD = 3, 0.3
 
-local ZONE = 10.0             -- 距离目标多少格内启用精细控制
+local ZONE = 10.0             -- Distance to target within which fine control is enabled (blocks)
 local TICK = 0.1
 
 
 -- ==============================================
--- 初始化传感器
+-- Initialize sensors & monitor
 -- ==============================================
 local heightSensor = peripheral.wrap("top")
 local velSensor = peripheral.wrap("right")
+term.redirect(peripheral.wrap("monitor"))
 
 if not heightSensor then error("Height sensor not found on top", 0) end
 if not velSensor then error("Velocity sensor not found on right", 0) end
@@ -29,7 +28,7 @@ if not velSensor then error("Velocity sensor not found on right", 0) end
 local targetHeight = 200
 
 -- ==============================================
--- 辅助函数：获取高度、速度、气压
+-- Helper functions: get height, velocity, air pressure
 -- ==============================================
 local function getHeight()
     local h = heightSensor.getHeight()
@@ -43,19 +42,19 @@ end
 
 local function getAirPressure()
     local p = heightSensor.getAirPressure()
-    return (type(p) == "number") and p or 1.0   -- 默认 1.0
+    return (type(p) == "number") and p or 1.0   -- Default 1.0
 end
 
 
 -- ==============================================
--- 主控制循环
+-- Main control loop
 -- ==============================================
 local function controlTask()
     while true do
         local h = getHeight()
         local v = getVelocity()
         local v_up = -v
-        local inFineZone = false   -- 记录上一周期是否在精细区内
+        local inFineZone = false   -- Record whether the previous cycle was in the fine zone
 
         if h == nil then h = targetHeight end
         if v == nil then v = 0 end
@@ -63,36 +62,36 @@ local function controlTask()
         local error = targetHeight - h
         local airPressure = getAirPressure()
 
-        -- 计算悬停所需的基础推力（前馈）
+        -- Calculate base thrust required for hovering (feedforward)
         local base_ratio = GRAVITY / (MAX_ACC_UP * airPressure)
-        local base_output = base_ratio * 15  -- 浮点数，最后再取整
+        local base_output = base_ratio * 15  -- Floating point, round at the end
         local output, target_acc
 
         if math.abs(error) <= ZONE then
-            -- ===== 精细区：PD 阻尼控制 =====
+            -- ===== Fine zone: PD damping control =====
             if not inFineZone then
-                -- 进入精细区，保持输出连续，不清零 PID 历史（使用独立 PD 变量）
+                -- Entering fine zone, keep output continuous, do not reset PID history (use independent PD variables)
                 inFineZone = true
                 lastError = error
             end
 
             local desired_vel = KP * error
-            local vel_error = desired_vel - v_up   -- 速度误差
+            local vel_error = desired_vel - v_up   -- Velocity error
 
-            -- 推力修正量 = 速度误差的比例（实际相当于 P-D 串联）
+            -- Thrust correction = proportional to velocity error (actually equivalent to P-D cascade)
             local correction = KD * vel_error
             local limited_corr = 15 - base_output
             correction = math.max(-limited_corr, math.min(limited_corr, correction))
-            -- 合成总推力（前馈 + 修正）
+            -- Total thrust (feedforward + correction)
             output = base_output + correction + (error/ZONE)*2
 
-             --调试显示
+             -- Debug display
             term.setCursorPos(1, 6)
             term.clearLine()
             term.write(string.format("cor:%6.1f",
                 correction))
         else
-            -- ===== 物理预测制动区 =====
+            -- ===== Physics prediction braking zone =====
             local current_kinetic = v*v/2
             local required_potential = GRAVITY* error
             local final_required_kinetic = 0
@@ -113,10 +112,10 @@ local function controlTask()
         if output > 15 then output = 15
         elseif output < 0 then output = 0 end
 
-        -- 输出到螺旋桨（反相）
+        -- Output to propeller (inverted)
         redstone.setAnalogOutput("bottom", 15 - output)
 
-         --调试显示
+         -- Debug display
         term.setCursorPos(1, 5)
         term.clearLine()
         term.write(string.format("H:%6.1f T:%6.1f V:%5.2f Err:%6.1f Out:%2d",
@@ -127,7 +126,7 @@ local function controlTask()
 end
 
 -- ==============================================
--- 用户输入任务
+-- User input task
 -- ==============================================
 local function inputTask()
     term.setTextColor(colors.yellow)
