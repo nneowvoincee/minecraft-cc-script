@@ -292,122 +292,155 @@ local function displayTask()
         local w, h = monitor.getSize()
         if not w then w, h = 20, 10 end   -- fallback
 
-        term.clear()
-        term.setTextColor(colors.white)
-
-        -- 1. 当前位置（黄色）
-        term.setCursorPos(1, 1)
-        term.setTextColor(colors.yellow)
-        if current_position then
-            term.write(string.format("Cur: %.1f, %.1f, %.1f", current_position.x, current_position.y, current_position.z))
-        else
-            term.write("Cur: N/A")
-        end
-
-        -- 2. 目标位置（青色）
-        term.setCursorPos(1, 2)
-        term.setTextColor(colors.cyan)
-        if target then
-            term.write(string.format("Tgt: %.1f, %.1f, %.1f", target.x, target.y, target.z))
-        else
-            term.write("Tgt: N/A")
-        end
-
-        -- 3. 水平合速度（白色）
-        local v1_raw = horSpeedSensor1.getVelocity()
-        local v2_raw = horSpeedSensor2.getVelocity()
-        local v_fwd = (type(v1_raw) == "number" and v1_raw or 0) / GRAVITY
-        local v_rgt = (type(v2_raw) == "number" and v2_raw or 0) / GRAVITY
-        local h_speed = math.sqrt(v_fwd * v_fwd + v_rgt * v_rgt)
-        term.setCursorPos(1, 3)
-        term.setTextColor(colors.white)
-        term.write(string.format("Speed: %.2f m/s", h_speed))
-
-        -- 4. ETA（绿色/红色）
-        local eta_str = "NaN"
-        if current_position then
-            local dist = getRelativeDist(current_position, target)
-            if dist and dist > 0 then
-                local toTarget = target - current_position
-                local hDir = vector.new(toTarget.x, 0, toTarget.z)
-                local len = hDir:length()
-                if len > 0 then
-                    hDir = hDir / len
-                    local yaw_rad = math.rad(current_yaw or 0)
-                    local fwd_world = vector.new(-math.sin(yaw_rad), 0, math.cos(yaw_rad))
-                    local rgt_world = vector.new(-math.cos(yaw_rad), 0, -math.sin(yaw_rad))
-                    local world_vel = fwd_world * v_fwd + rgt_world * v_rgt
-                    local proj = world_vel:dot(hDir)
-                    if proj > 0 then
-                        eta_str = string.format("%.1f s", dist / proj)
-                    end
-                end
-            end
-        end
-        term.setCursorPos(1, 4)
-        if eta_str == "NaN" then
+        if isDisable() then
+            -- ==============================================
+            -- 手动操控模式：红色大框 + 居中文字
+            -- ==============================================
+            term.clear()
             term.setTextColor(colors.red)
-        else
-            term.setTextColor(colors.green)
-        end
-        term.write("ETA: " .. eta_str)
 
-        -- 5. 速度方向箭头（白色，从中心指向移动方向）
-        term.setTextColor(colors.white)
-        local cx = math.floor(w/2) + 1
-        local cy = math.floor(h/2) + 1
-        local max_spd = math.max(math.abs(v_fwd), math.abs(v_rgt), 0.01)
-        local scale = math.min(w/2, h/2) / max_spd
-        local ax = v_rgt * scale
-        local ay = -v_fwd * scale   -- 屏幕Y轴向上为负，需取反
-        local ex = math.max(1, math.min(w, math.floor(cx + ax + 0.5)))
-        local ey = math.max(1, math.min(h, math.floor(cy + ay + 0.5)))
-        local steps = math.max(math.abs(ex - cx), math.abs(ey - cy))
-        if steps > 0 then
-            for i = 0, steps do
-                local px = math.floor(cx + (ex - cx) * i / steps + 0.5)
-                local py = math.floor(cy + (ey - cy) * i / steps + 0.5)
-                if px >= 1 and px <= w and py >= 1 and py <= h then
-                    term.setCursorPos(px, py)
-                    if i == steps then
-                        term.write(">")
-                    else
-                        term.write("*")
+            -- 上边框
+            term.setCursorPos(1, 1)
+            term.write(string.rep("█", w))
+            -- 下边框
+            term.setCursorPos(1, h)
+            term.write(string.rep("█", w))
+            -- 左边框
+            for i = 2, h-1 do
+                term.setCursorPos(1, i)
+                term.write("█")
+            end
+            -- 右边框
+            for i = 2, h-1 do
+                term.setCursorPos(w, i)
+                term.write("█")
+            end
+
+            -- 居中显示提示文字
+            local text = "MANUAL CONTROL"
+            local textX = math.floor((w - #text) / 2) + 1
+            local textY = math.floor(h / 2) + 1
+            term.setCursorPos(textX, textY)
+            term.write(text)
+        else
+
+            term.clear()
+            term.setTextColor(colors.white)
+
+            -- 1. 当前位置（黄色）
+            term.setCursorPos(1, 1)
+            term.setTextColor(colors.yellow)
+            if current_position then
+                term.write(string.format("Cur: %.1f, %.1f, %.1f", current_position.x, current_position.y, current_position.z))
+            else
+                term.write("Cur: N/A")
+            end
+
+            -- 2. 目标位置（青色）
+            term.setCursorPos(1, 2)
+            term.setTextColor(colors.cyan)
+            if target then
+                term.write(string.format("Tgt: %.1f, %.1f, %.1f", target.x, target.y, target.z))
+            else
+                term.write("Tgt: N/A")
+            end
+
+            -- 3. 水平合速度（白色）
+            local v1_raw = horSpeedSensor1.getVelocity()
+            local v2_raw = horSpeedSensor2.getVelocity()
+            local v_fwd = (type(v1_raw) == "number" and v1_raw or 0) / GRAVITY
+            local v_rgt = (type(v2_raw) == "number" and v2_raw or 0) / GRAVITY
+            local h_speed = math.sqrt(v_fwd * v_fwd + v_rgt * v_rgt)
+            term.setCursorPos(1, 3)
+            term.setTextColor(colors.white)
+            term.write(string.format("Speed: %.2f m/s", h_speed))
+
+            -- 4. ETA（绿色/红色）
+            local eta_str = "NaN"
+            if current_position then
+                local dist = getRelativeDist(current_position, target)
+                if dist and dist > 0 then
+                    local toTarget = target - current_position
+                    local hDir = vector.new(toTarget.x, 0, toTarget.z)
+                    local len = hDir:length()
+                    if len > 0 then
+                        hDir = hDir / len
+                        local yaw_rad = math.rad(current_yaw or 0)
+                        local fwd_world = vector.new(-math.sin(yaw_rad), 0, math.cos(yaw_rad))
+                        local rgt_world = vector.new(-math.cos(yaw_rad), 0, -math.sin(yaw_rad))
+                        local world_vel = fwd_world * v_fwd + rgt_world * v_rgt
+                        local proj = world_vel:dot(hDir)
+                        if proj > 0 then
+                            eta_str = string.format("%.1f s", dist / proj)
+                        end
                     end
                 end
             end
-        end
+            term.setCursorPos(1, 4)
+            if eta_str == "NaN" then
+                term.setTextColor(colors.red)
+            else
+                term.setTextColor(colors.green)
+            end
+            term.write("ETA: " .. eta_str)
 
-        -- 6. 目标方向标记（红色 ◈，根据距离自适应位置）
-        if current_position and target and target_angle ~= nil then
+            -- 5. 速度方向箭头（白色，从中心指向移动方向）
+            term.setTextColor(colors.white)
             local cx = math.floor(w/2) + 1
             local cy = math.floor(h/2) + 1
-            local rad = math.rad(target_angle)
-            -- 方向向量：机头前向为 -Y（屏幕下方为前进方向），左右不反
-            local dirx = math.sin(rad)
-            local diry = math.cos(rad)   -- 下方为正
+            local max_spd = math.max(math.abs(v_fwd), math.abs(v_rgt), 0.01)
+            local scale = math.min(w/2, h/2) / max_spd
+            local ax = v_rgt * scale
+            local ay = -v_fwd * scale   -- 屏幕Y轴向上为负，需取反
+            local ex = math.max(1, math.min(w, math.floor(cx + ax + 0.5)))
+            local ey = math.max(1, math.min(h, math.floor(cy + ay + 0.5)))
+            local steps = math.max(math.abs(ex - cx), math.abs(ey - cy))
+            if steps > 0 then
+                for i = 0, steps do
+                    local px = math.floor(cx + (ex - cx) * i / steps + 0.5)
+                    local py = math.floor(cy + (ey - cy) * i / steps + 0.5)
+                    if px >= 1 and px <= w and py >= 1 and py <= h then
+                        term.setCursorPos(px, py)
+                        if i == steps then
+                            term.write(">")
+                        else
+                            term.write("*")
+                        end
+                    end
+                end
+            end
 
-            -- 计算从中心到屏幕边缘的向量（最大延伸）
-            local sx = (w/2) / (math.abs(dirx) + 0.001)
-            local sy = (h/2) / (math.abs(diry) + 0.001)
-            local s = math.min(sx, sy)
-            local max_dx = dirx * s
-            local max_dy = diry * s
+            -- 6. 目标方向标记（红色 ◈，根据距离自适应位置）
+            if current_position and target and target_angle ~= nil then
+                local cx = math.floor(w/2) + 1
+                local cy = math.floor(h/2) + 1
+                local rad = math.rad(target_angle)
+                -- 方向向量：机头前向为 -Y（屏幕下方为前进方向），左右不反
+                local dirx = math.sin(rad)
+                local diry = math.cos(rad)   -- 下方为正
 
-            -- 获取水平距离
-            local dist = getRelativeDist(current_position, target)
-            -- 计算比例：dist/HOR_ZONE，但限制在 0~1 之间（内部用，超出 1 则设在边缘）
-            local ratio = (dist and dist > 0) and math.min(dist / HOR_ZONE, 1.0) or 1.0
+                -- 计算从中心到屏幕边缘的向量（最大延伸）
+                local sx = (w/2) / (math.abs(dirx) + 0.001)
+                local sy = (h/2) / (math.abs(diry) + 0.001)
+                local s = math.min(sx, sy)
+                local max_dx = dirx * s
+                local max_dy = diry * s
 
-            local dotx = math.max(1, math.min(w, math.floor(cx + max_dx * ratio + 0.5)))
-            local doty = math.max(1, math.min(h, math.floor(cy + max_dy * ratio + 0.5)))
+                -- 获取水平距离
+                local dist = getRelativeDist(current_position, target)
+                -- 计算比例：dist/HOR_ZONE，但限制在 0~1 之间（内部用，超出 1 则设在边缘）
+                local ratio = (dist and dist > 0) and math.min(dist / HOR_ZONE, 1.0) or 0
 
-            term.setCursorPos(dotx, doty)
-            term.setTextColor(colors.green)
-            term.write("◈")   -- 醒目符号
+                local dotx = math.max(1, math.min(w, math.floor(cx + max_dx * ratio + 0.5)))
+                local doty = math.max(1, math.min(h, math.floor(cy + max_dy * ratio + 0.5)))
+
+                term.setCursorPos(dotx, doty)
+                term.setTextColor(colors.green)
+                term.write("X")   -- 醒目符号
+            end
         end
-
         sleep(0.5)
+
     end
 end
 
