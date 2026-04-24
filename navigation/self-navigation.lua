@@ -24,7 +24,7 @@ local DISABLE_SLEEP_TICK = 2
 -- Initialize
 -- ==============================================
 -- sensor
-local heightSensor = peripheral.find("top")
+local heightSensor = peripheral.warp("top")
 local velSensor = peripheral.wrap("right")
 
 if not heightSensor then error("Height sensor not found on top", 0) end
@@ -32,9 +32,9 @@ if not velSensor then error("Velocity sensor not found on right", 0) end
 
 -- modem + gps
 peripheral.find("modem", rednet.open)
-local target = vector.new(gps.locate())
-
+local x, y, z = gps.locate()
 if x == nil then error("GPS is not set up.", 0) end
+local target = vector.new(x,y,z)
 
 local targetHeight = y  -- set current height as target height (don't move initially
 
@@ -42,7 +42,7 @@ local targetHeight = y  -- set current height as target height (don't move initi
 local relay = peripheral.find("redstone_relay")
 if relay == nil then error("Missing redstone relay", 0) end
 
--- displat
+-- display
 local monitor = peripheral.find("monitor")
 if monitor == nil then error("Missing monitor", 0) end
 term.redirect(monitor)
@@ -266,7 +266,7 @@ local function inputTask()
                 target = vector.new(tonumber(x), tonumber(y), tonumber(z))
                 -- Optional: print confirmation
                 term.setTextColor(colors.green)
-                print("New target: " .. target)
+                print("New target: " .. target.x .. " " .. target.y .. " " .. target.z)
                 term.setTextColor(colors.white)
             end
         end

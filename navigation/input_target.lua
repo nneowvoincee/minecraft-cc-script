@@ -104,7 +104,6 @@ end
 -- Draw cool header
 local function drawHeader()
     term.setBackgroundColor(colors.black)
-    term.clear()
     term.setCursorPos(1,1)
     term.setTextColor(colors.lightBlue)
     print("+-----------------------------+")
@@ -140,8 +139,7 @@ end
 
 -- Main loop
 local targetX, targetY, targetZ = nil, nil, nil
-drawHeader()
-print()
+term.clear()
 
 while true do
     drawHeader()
