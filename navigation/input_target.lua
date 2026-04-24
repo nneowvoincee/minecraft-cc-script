@@ -118,9 +118,9 @@ end
 -- Helper color functions
 local function printSuccess(msg)
     term.clear()
-    term.setCursorPos(1,10)
-    print(string.rep("-", 36))
     term.setCursorPos(1,11)
+    print(string.rep("-", 36))
+    term.setCursorPos(1,12)
     term.setTextColor(colors.green)
     print(msg)
     term.setTextColor(colors.white)
@@ -129,9 +129,9 @@ end
 
 local function printError(msg)
     term.clear()
-    term.setCursorPos(1,10)
-    print(string.rep("-", 36))
     term.setCursorPos(1,11)
+    print(string.rep("-", 36))
+    term.setCursorPos(1,12)
     term.setTextColor(colors.red)
     print(msg)
     term.setTextColor(colors.white)
@@ -144,13 +144,15 @@ drawHeader()
 print()
 
 while true do
+    drawHeader()
+    print()
     if targetX then
         term.setTextColor(colors.yellow)
         write("Current target: (")
         term.setTextColor(colors.white)
         write(targetX .. ", " .. targetY .. ", " .. targetZ .. ")")
-        print()
     end
+    print()
 
     term.setTextColor(colors.cyan)
     write("Enter new target (X Y Z) or relative (e.g. ~ ~ ~), q to quit: ")
