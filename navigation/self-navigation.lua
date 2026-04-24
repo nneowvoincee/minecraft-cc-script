@@ -336,9 +336,9 @@ local function displayTask()
                 term.write("Cur: N/A")
             end
 
-            -- 2. 目标位置（青色）
+            -- 2. 目标位置（）
             term.setCursorPos(1, 2)
-            term.setTextColor(colors.cyan)
+            term.setTextColor(colors.green)
             if target then
                 term.write(string.format("Tgt: %.1f, %.1f, %.1f", target.x, target.y, target.z))
             else
@@ -410,7 +410,7 @@ local function displayTask()
                 end
             end
 
-            -- 6. 目标方向标记（红色 ◈，根据距离自适应位置）
+            -- 6. 目标方向标记(根据距离自适应位置）
             if current_position and target and target_angle ~= nil then
                 local cx = math.floor(w/2) + 1
                 local cy = math.floor(h/2) + 1
