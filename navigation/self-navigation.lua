@@ -14,24 +14,29 @@ local KP, KD = 3, 0.3
 local ZONE = 10.0             -- Distance to target within which fine control is enabled (blocks)
 local TICK = 0.1
 
-local defaultHeight = 150       -- standard moving height for long-distance navigation
-local CHANNEL_BROADCAST = 10001
+CHANNEL_BROADCAST = 10001
+local navigationAltitude = 150       -- standard moving height for long-distance navigation
 
 -- ==============================================
 -- Initialize
 -- ==============================================
+-- sensor
 local heightSensor = peripheral.wrap("top")
 local velSensor = peripheral.wrap("right")
 
 if not heightSensor then error("Height sensor not found on top", 0) end
 if not velSensor then error("Velocity sensor not found on right", 0) end
 
-CHANNEL_BROADCAST = 10001
+-- modem + gps
 peripheral.find("modem", rednet.open)
-
 local x, y, z = gps.locate()
+
 if x == nil then error("GPS is not set up.", 0) end
-local vector = require("vector")
+
+local targetHeight = y  -- set current height as target height (don't move initially
+
+-- redstone relay, for outputting signal
+local relay = peripheral.find("redstone_relay")
 
 -- ==============================================
 -- Helper functions: get height, velocity, air pressure
@@ -57,10 +62,7 @@ local function getInFrontCompCoor() -- the coordinate of the front computer
     return tonumber(a), tonumber(b), tonumber(c)
 end
 
-local function getRelativeAngle(target)
-    local pSelf = vector.new(gps.locate())
-    local pFront = vector.new(getInFrontCompCoor())
-
+local function getRelativeAngle(pSelf, pFront, target)
     -- 当前朝向的水平方向向量
     local dirSelf = pFront - pSelf
     -- 目标方向的水平方向向量
@@ -77,10 +79,38 @@ local function getRelativeAngle(target)
     return math.deg(delta)   -- 返回度数，正=右，负=左
 end
 
+local function getRelativeDist(pSelf, target)
+    local pSelf = vector.new(gps.locate())
+
+end
+
+local function setLift(output)  -- Output: 15 - max lift force; 0 - no lift force
+    redstone.setAnalogOutput("bottom", 15 - output)
+end
+
+local function turnRight(output)
+
+end
+
+local function turnLeft(output)
+
+end
+
+local function moveForward(left_out, right_out)
+    
+end
 -- ==============================================
 -- Main control loop
 -- ==============================================
-local function controlTask()
+local function controlTask_hor()
+    while true do
+        local pSelf = vector.new(gps.locate())
+        local pFront = vector.new(getInFrontCompCoor())
+    end
+end
+
+
+local function controlTask_y()
     while true do
         local h = getHeight()
         local v = getVelocity()
@@ -144,7 +174,7 @@ local function controlTask()
         elseif output < 0 then output = 0 end
 
         -- Output to propeller (inverted)
-        redstone.setAnalogOutput("bottom", 15 - output)
+        setLift(output)
 
          -- Debug display
         term.setCursorPos(1, 5)
@@ -178,4 +208,4 @@ local function inputTask()
     end
 end
 
-parallel.waitForAny(controlTask, inputTask)
+parallel.waitForAny(controlTask_y, inputTask)
