@@ -42,6 +42,11 @@ local targetHeight = y  -- set current height as target height (don't move initi
 local relay = peripheral.find("redstone_relay")
 if relay == nil then error("Missing redstone relay", 0) end
 
+-- displat
+local monitor = peripheral.find("monitor")
+if monitor == nil then error("Missing monitor", 0) end
+term.redirect(monitor)
+
 -- ==============================================
 -- Helper functions: get height, velocity, air pressure
 -- ==============================================
@@ -93,7 +98,6 @@ local function getRelativeDist(pSelf, target)
 end
 
 local function setLift(output)  -- Output: 15 - max lift force; 0 - no lift force
-    -- redstone.setAnalogOutput("bottom", 15 - output)
     relay.setAnalogOutput("top", output)
 end
 
@@ -253,22 +257,20 @@ end
 -- User input task
 -- ==============================================
 local function inputTask()
-    term.setTextColor(colors.yellow)
-    print("Hybrid Controller (PID + Physics Brake)")
-    print("Target: " .. targetHeight)
-    print("Enter new target (>= -64):")
-    term.setTextColor(colors.white)
-
     while true do
-        write("New target (x z y): ")
-        local n = tonumber(read())
-        if n and n >= -64 then
-            targetHeight = n
-            print("Target updated to " .. targetHeight)
-        else
-            print("Invalid, must be >= -64")
+        local id, message = rednet.receive()
+        -- Check if message is a string and starts with "target"
+        if type(message) == "string" then
+            local x, y, z = message:match("^target%s+([%d.-]+)%s+([%d.-]+)%s+([%d.-]+)$")
+            if x then
+                target = vector.new(tonumber(x), tonumber(y), tonumber(z))
+                -- Optional: print confirmation
+                term.setTextColor(colors.green)
+                print("New target: " .. target)
+                term.setTextColor(colors.white)
+            end
         end
     end
 end
 
-parallel.waitForAny(controlTask_y, inputTask)
+parallel.waitForAny(controlTask_hor, controlTask_y, inputTask)
