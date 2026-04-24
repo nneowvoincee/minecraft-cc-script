@@ -301,19 +301,19 @@ local function displayTask()
 
             -- 上边框
             term.setCursorPos(1, 1)
-            term.write(string.rep("█", w))
+            term.write(string.rep("=", w))
             -- 下边框
             term.setCursorPos(1, h)
-            term.write(string.rep("█", w))
+            term.write(string.rep("=", w))
             -- 左边框
             for i = 2, h-1 do
                 term.setCursorPos(1, i)
-                term.write("█")
+                term.write("#")
             end
             -- 右边框
             for i = 2, h-1 do
                 term.setCursorPos(w, i)
-                term.write("█")
+                term.write("#")
             end
 
             -- 居中显示提示文字
