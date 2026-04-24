@@ -352,34 +352,14 @@ local function displayTask()
         end
         term.write("ETA: " .. eta_str)
 
-        -- 5. 目标方向标记（红色 X，在边缘显示）
-        if target_angle ~= nil then
-            local cx = math.floor(w/2) + 1
-            local cy = math.floor(h/2) + 1
-            local rad = math.rad(target_angle)
-            -- 调整上下反向：去掉负号，让 forward 指向屏幕下方
-            local dirx = math.sin(rad)
-            local diry = math.cos(rad)   -- 原来为 -math.cos(rad)，现取反
-            local sx = (w/2) / (math.abs(dirx) + 0.001)
-            local sy = (h/2) / (math.abs(diry) + 0.001)
-            local s = math.min(sx, sy)
-            local dx = dirx * s
-            local dy = diry * s
-            local dotx = math.max(1, math.min(w, math.floor(cx + dx + 0.5)))
-            local doty = math.max(1, math.min(h, math.floor(cy + dy + 0.5)))
-            term.setCursorPos(dotx, doty)
-            term.setTextColor(colors.red)
-            term.write("X")   -- 更突出的标记
-        end
-
-        -- 6. 速度方向箭头（白色，从中心指向移动方向）
+        -- 5. 速度方向箭头（白色，从中心指向移动方向）
         term.setTextColor(colors.white)
         local cx = math.floor(w/2) + 1
         local cy = math.floor(h/2) + 1
         local max_spd = math.max(math.abs(v_fwd), math.abs(v_rgt), 0.01)
         local scale = math.min(w/2, h/2) / max_spd
         local ax = v_rgt * scale
-        local ay = -v_fwd * scale   -- 注意：屏幕 Y 轴向上是负方向，必须取反才能让机头指向正确
+        local ay = -v_fwd * scale   -- 屏幕Y轴向上为负，需取反
         local ex = math.max(1, math.min(w, math.floor(cx + ax + 0.5)))
         local ey = math.max(1, math.min(h, math.floor(cy + ay + 0.5)))
         local steps = math.max(math.abs(ex - cx), math.abs(ey - cy))
@@ -396,6 +376,35 @@ local function displayTask()
                     end
                 end
             end
+        end
+
+        -- 6. 目标方向标记（红色 ◈，根据距离自适应位置）
+        if current_position and target and target_angle ~= nil then
+            local cx = math.floor(w/2) + 1
+            local cy = math.floor(h/2) + 1
+            local rad = math.rad(target_angle)
+            -- 方向向量：机头前向为 -Y（屏幕下方为前进方向），左右不反
+            local dirx = math.sin(rad)
+            local diry = math.cos(rad)   -- 下方为正
+
+            -- 计算从中心到屏幕边缘的向量（最大延伸）
+            local sx = (w/2) / (math.abs(dirx) + 0.001)
+            local sy = (h/2) / (math.abs(diry) + 0.001)
+            local s = math.min(sx, sy)
+            local max_dx = dirx * s
+            local max_dy = diry * s
+
+            -- 获取水平距离
+            local dist = getRelativeDist(current_position, target)
+            -- 计算比例：dist/HOR_ZONE，但限制在 0~1 之间（内部用，超出 1 则设在边缘）
+            local ratio = (dist and dist > 0) and math.min(dist / HOR_ZONE, 1.0) or 1.0
+
+            local dotx = math.max(1, math.min(w, math.floor(cx + max_dx * ratio + 0.5)))
+            local doty = math.max(1, math.min(h, math.floor(cy + max_dy * ratio + 0.5)))
+
+            term.setCursorPos(dotx, doty)
+            term.setTextColor(colors.green)
+            term.write("◈")   -- 醒目符号
         end
 
         sleep(0.5)
