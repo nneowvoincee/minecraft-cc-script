@@ -24,7 +24,7 @@ local DISABLE_SLEEP_TICK = 2
 -- Initialize
 -- ==============================================
 -- sensor
-local heightSensor = peripheral.warp("left")
+local heightSensor = peripheral.find("altitude_sensor")
 local vecSpeedSensor = peripheral.wrap("right")
 local horSpeedSensor1 = peripheral.wrap("bottom")
 local horSpeedSensor2 = peripheral.wrap("top")
@@ -111,20 +111,28 @@ local function getRelativeDist(pSelf, target)
 end
 
 local function setLift(output)  -- Output: 15 - max lift force; 0 - no lift force
+    if output > 15 then output = 15
+    elseif output < 0 then output = 0 end
     relay.setAnalogOutput("bottom", output)
 end
 
 local function turnRight(output)    
+    if output > 15 then output = 15
+    elseif output < 0 then output = 0 end
     relay.setAnalogOutput("left", 0)
     relay.setAnalogOutput("right", output)
 end
 
 local function turnLeft(output)
+    if output > 15 then output = 15
+    elseif output < 0 then output = 0 end
     relay.setAnalogOutput("left", output)
     relay.setAnalogOutput("right", 0)
 end
 
 local function moveForward(output)
+    if output > 15 then output = 15
+    elseif output < 0 then output = 0 end
     relay.setAnalogOutput("front", output)
 end
 
@@ -174,7 +182,7 @@ local function controlTask_hor()
                     if math.abs(target_angle) >= 90 then
                         turnLeft(15)
                     else
-                        turnLeft(math.floor((target_angle/90)*15 + 0.5 ))
+                        turnLeft(math.floor((target_angle/90)*15))
                     end
                 end
             else
@@ -249,10 +257,6 @@ local function controlTask_y()
             end
 
             output = math.floor(output + 0.5)
-            if output > 15 then output = 15
-            elseif output < 0 then output = 0 end
-
-            -- Output to propeller (inverted)
             setLift(output)
 
             sleep(Y_TICK)
