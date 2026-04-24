@@ -293,34 +293,46 @@ local function displayTask()
         if not w then w, h = 20, 10 end   -- fallback
 
         term.clear()
-        term.setCursorPos(1, 1)
+        term.setTextColor(colors.white)
 
-        -- 1. Current coordinates
+        -- 1. 当前位置（黄色）
+        term.setCursorPos(1, 1)
+        term.setTextColor(colors.yellow)
         if current_position then
-            term.write(string.format("Pos: %.1f, %.1f, %.1f", current_position.x, current_position.y, current_position.z))
+            term.write(string.format("Cur: %.1f, %.1f, %.1f", current_position.x, current_position.y, current_position.z))
         else
-            term.write("Pos: N/A")
+            term.write("Cur: N/A")
         end
 
-        -- 2. Horizontal speed (local frame: forward / right)
+        -- 2. 目标位置（青色）
+        term.setCursorPos(1, 2)
+        term.setTextColor(colors.cyan)
+        if target then
+            term.write(string.format("Tgt: %.1f, %.1f, %.1f", target.x, target.y, target.z))
+        else
+            term.write("Tgt: N/A")
+        end
+
+        -- 3. 水平合速度（白色）
         local v1_raw = horSpeedSensor1.getVelocity()
         local v2_raw = horSpeedSensor2.getVelocity()
         local v_fwd = (type(v1_raw) == "number" and v1_raw or 0) / GRAVITY
         local v_rgt = (type(v2_raw) == "number" and v2_raw or 0) / GRAVITY
-        term.setCursorPos(1, 2)
-        term.write(string.format("HSpd: Fwd %.2f, Rgt %.2f", v_fwd, v_rgt))
+        local h_speed = math.sqrt(v_fwd * v_fwd + v_rgt * v_rgt)
+        term.setCursorPos(1, 3)
+        term.setTextColor(colors.white)
+        term.write(string.format("Speed: %.2f m/s", h_speed))
 
-        -- 3. ETA
+        -- 4. ETA（绿色/红色）
         local eta_str = "NaN"
         if current_position then
             local dist = getRelativeDist(current_position, target)
             if dist and dist > 0 then
                 local toTarget = target - current_position
-                local hDir = vector.new(toTarget.x, 0, toTarget.z)   -- horizontal only
+                local hDir = vector.new(toTarget.x, 0, toTarget.z)
                 local len = hDir:length()
                 if len > 0 then
                     hDir = hDir / len
-                    -- world velocity from ship‑local speeds and yaw
                     local yaw_rad = math.rad(current_yaw or 0)
                     local fwd_world = vector.new(-math.sin(yaw_rad), 0, math.cos(yaw_rad))
                     local rgt_world = vector.new(-math.cos(yaw_rad), 0, -math.sin(yaw_rad))
@@ -332,17 +344,22 @@ local function displayTask()
                 end
             end
         end
-        term.setCursorPos(1, 3)
+        term.setCursorPos(1, 4)
+        if eta_str == "NaN" then
+            term.setTextColor(colors.red)
+        else
+            term.setTextColor(colors.green)
+        end
         term.write("ETA: " .. eta_str)
 
-        -- 4. Green dot for target direction (on monitor edge)
+        -- 5. 目标方向标记（红色 X，在边缘显示）
         if target_angle ~= nil then
             local cx = math.floor(w/2) + 1
             local cy = math.floor(h/2) + 1
             local rad = math.rad(target_angle)
+            -- 调整上下反向：去掉负号，让 forward 指向屏幕下方
             local dirx = math.sin(rad)
-            local diry = -math.cos(rad)   -- forward = up on screen
-            -- scale to reach border
+            local diry = math.cos(rad)   -- 原来为 -math.cos(rad)，现取反
             local sx = (w/2) / (math.abs(dirx) + 0.001)
             local sy = (h/2) / (math.abs(diry) + 0.001)
             local s = math.min(sx, sy)
@@ -351,18 +368,18 @@ local function displayTask()
             local dotx = math.max(1, math.min(w, math.floor(cx + dx + 0.5)))
             local doty = math.max(1, math.min(h, math.floor(cy + dy + 0.5)))
             term.setCursorPos(dotx, doty)
-            term.setTextColor(colors.green)
-            term.write("O")
-            term.setTextColor(colors.white)
+            term.setTextColor(colors.red)
+            term.write("X")   -- 更突出的标记
         end
 
-        -- 5. Arrow from centre in direction of horizontal movement (local)
+        -- 6. 速度方向箭头（白色，从中心指向移动方向）
+        term.setTextColor(colors.white)
         local cx = math.floor(w/2) + 1
         local cy = math.floor(h/2) + 1
         local max_spd = math.max(math.abs(v_fwd), math.abs(v_rgt), 0.01)
         local scale = math.min(w/2, h/2) / max_spd
-        local ax = v_rgt * scale   -- right is +x on screen
-        local ay = -v_fwd * scale  -- forward is -y (up)
+        local ax = v_rgt * scale
+        local ay = -v_fwd * scale   -- 注意：屏幕 Y 轴向上是负方向，必须取反才能让机头指向正确
         local ex = math.max(1, math.min(w, math.floor(cx + ax + 0.5)))
         local ey = math.max(1, math.min(h, math.floor(cy + ay + 0.5)))
         local steps = math.max(math.abs(ex - cx), math.abs(ey - cy))
