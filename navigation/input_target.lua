@@ -117,15 +117,25 @@ end
 
 -- Helper color functions
 local function printSuccess(msg)
+    term.clear()
+    term.setCursorPos(1,10)
+    print(string.rep("-", 36))
+    term.setCursorPos(1,11)
     term.setTextColor(colors.green)
     print(msg)
     term.setTextColor(colors.white)
+    term.setCursorPos(1,1)
 end
 
 local function printError(msg)
+    term.clear()
+    term.setCursorPos(1,10)
+    print(string.rep("-", 36))
+    term.setCursorPos(1,11)
     term.setTextColor(colors.red)
     print(msg)
     term.setTextColor(colors.white)
+    term.setCursorPos(1,1)
 end
 
 -- Main loop
@@ -153,6 +163,7 @@ while true do
         break
     end
 
+
     local coords, err = parseInput(input)
     if not coords then
         printError("Error: " .. err)
@@ -162,7 +173,6 @@ while true do
         rednet.broadcast(msg)
         printSuccess(">>> Broadcasted: " .. msg)
     end
-    print(string.rep("-", 36))
 end
 
 rednet.close(peripheral.getName(modem))
