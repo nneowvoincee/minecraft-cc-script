@@ -114,12 +114,12 @@ local function drawHeader()
     print("+-----------------------------+")
 end
 
--- Helper color functions
+-- Helper color functions （yay random dumb code
 local function printSuccess(msg)
     term.clear()
-    term.setCursorPos(1,11)
-    print(string.rep("-", 36))
     term.setCursorPos(1,12)
+    print(string.rep("-", 36))
+    term.setCursorPos(1,13)
     term.setTextColor(colors.green)
     print(msg)
     term.setTextColor(colors.white)
@@ -128,9 +128,9 @@ end
 
 local function printError(msg)
     term.clear()
-    term.setCursorPos(1,11)
-    print(string.rep("-", 36))
     term.setCursorPos(1,12)
+    print(string.rep("-", 36))
+    term.setCursorPos(1,13)
     term.setTextColor(colors.red)
     print(msg)
     term.setTextColor(colors.white)
