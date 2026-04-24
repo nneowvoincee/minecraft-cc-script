@@ -159,7 +159,7 @@ while true do
     else
         targetX, targetY, targetZ = coords[1], coords[2], coords[3]
         local msg = "target " .. targetX .. " " .. targetY .. " " .. targetZ
-        rednet.broadcast(msg, CHANNEL_BROADCAST)
+        rednet.broadcast(msg)
         printSuccess(">>> Broadcasted: " .. msg)
     end
     print(string.rep("-", 36))
