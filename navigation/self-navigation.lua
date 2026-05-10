@@ -52,7 +52,7 @@ if monitor == nil then error("Missing monitor", 0) end
 term.redirect(monitor)
 
 -- "global" variable shared between functions
-local current_h, current_v, current_position, front_position, target_angle
+local current_h, current_v, current_position, back_position, target_angle
 
 -- ==============================================
 -- Helper functions: get height, velocity, air pressure
@@ -82,16 +82,16 @@ local function isDisable()
     return not redstone.getInput("front")
 end
 
-local function getFrontCompCoord() -- the coordinate of the front computer
+local function getBackCompCoord() -- the coordinate of the front computer
     rednet.broadcast("locate");
     local id, message = rednet.receive()
     local a, b, c = message:match("(%S+)%s+(%S+)%s+(%S+)")
     return tonumber(a), tonumber(b), tonumber(c)
 end
 
-local function getRelativeAngle(pSelf, front_position, target)
+local function getRelativeAngle(pSelf, back_position, target)
     -- 当前朝向的水平方向向量
-    local dirSelf = front_position - pSelf
+    local dirSelf = pSelf - back_position
     -- 目标方向的水平方向向量
     local dirTarget = target - pSelf
 
@@ -385,8 +385,8 @@ local function controlTask_main()
             -- Main Logic
             -- ==============================================
             current_position = vector.new(gps.locate())
-            front_position = vector.new(getFrontCompCoord())
-            target_angle = getRelativeAngle(current_position, front_position, target)
+            back_position = vector.new(getBackCompCoord())
+            target_angle = getRelativeAngle(current_position, back_position, target)
             local distance = getRelativeDist(current_position, target)
 
             if distance > HOR_ZONE then
