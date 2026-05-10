@@ -375,6 +375,7 @@ end
 
 local function controlTask_main()
     while true do
+        displayTask()
         if isDisable() then
             -- manually control
             stopHorMove()
@@ -418,7 +419,6 @@ local function controlTask_main()
                 stopHorMove()
             end
             
-            displayTask()
             sleep(MAIN_TICK)
         end
     end
