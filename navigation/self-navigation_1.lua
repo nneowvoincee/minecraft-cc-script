@@ -1,8 +1,8 @@
 -- ==============================================
 -- Physical Parameters -- Please fill according to your aircraft
 -- ==============================================
-local FAN_FORCE_UP = 3732.0        -- Upward force at full fan thrust (Newtons)
-local MASS = 241                 -- Aircraft mass (kg)
+local FAN_FORCE_UP = 543844.0        -- Upward force at full fan thrust (pN)
+local MASS = 35480.0                 -- Aircraft mass (pkg)
 local GRAVITY = 11        -- Gravity acceleration (m/s²), usually no need to change
 local MAX_ACC_UP = FAN_FORCE_UP/MASS
 
@@ -64,13 +64,13 @@ end
 
 local function getVecVelocity()
     local v = vecSpeedSensor.getVelocity()
-    return (type(v) == "number") and v or nil
+    return (type(v) == "number") and v*GRAVITY or nil
 end
 
 local function getHorVelocity()
     local v1 = horSpeedSensor1.getVelocity()
     local v2 = horSpeedSensor2.getVelocity()
-    return vector.new(v1/GRAVITY, 0, v2/GRAVITY)
+    return vector.new(v1, 0, v2)
 end
 
 local function getAirPressure()
@@ -206,11 +206,9 @@ local function displayTask()
         end
 
         -- 3. 水平合速度（白色）
-        local v1_raw = horSpeedSensor1.getVelocity()
-        local v2_raw = horSpeedSensor2.getVelocity()
-        local v_fwd = (type(v1_raw) == "number" and v1_raw or 0) / GRAVITY
-        local v_rgt = (type(v2_raw) == "number" and v2_raw or 0) / GRAVITY
-        local h_speed = math.sqrt(v_fwd * v_fwd + v_rgt * v_rgt)
+        local hor_v = getHorVelocity()
+        local h_speed = hor_v.length(hor_v)
+        
         term.setCursorPos(1, 3)
         term.setTextColor(colors.white)
         term.write(string.format("Speed: %.2f m/s", h_speed))
@@ -219,11 +217,11 @@ local function displayTask()
         local eta_str = "NaN"
         if current_position then
             local dist = getRelativeDist(current_position, target)
-            if dist and dist > 0 then
-                local hor_v = getHorVelocity()
-                eta_str = string.format("%.1f s", dist / hor_v.length(hor_v))
+            if dist and dist > 0 and h_speed > 0 then
+                eta_str = string.format("%.1f s", dist / h_speed)
             end
         end
+        
         term.setCursorPos(1, 4)
         if eta_str == "NaN" then
             term.setTextColor(colors.red)
@@ -232,16 +230,17 @@ local function displayTask()
         end
         term.write("ETA: " .. eta_str)
         
-        -- 5. 速度方向箭头（白色），方向指向屏幕运动方向，长度按 speed/GRAVITY 比例
+        -- 5. 速度方向箭头（白色），方向指向屏幕运动方向
         term.setTextColor(colors.white)
         local cx = math.floor(w/2) + 1
         local cy = math.floor(h/2) + 1
         local max_arrow_len = math.min(w/2, h/2) - 1   -- 留出边距
+
         if h_speed > 0 and max_arrow_len > 0 then
-            local speed_ratio = math.min(1, h_speed / GRAVITY)
-            -- 方向：v_fwd -> 屏幕下方（y+），v_rgt -> 屏幕右侧（x+）
-            local ux = v_rgt / h_speed   -- 单位向量 x 分量
-            local uy = v_fwd / h_speed   -- 单位向量 y 分量
+            local speed_ratio = math.min(1, h_speed / 15)   -- 15 m/s 为满刻度，可调
+            local ux = hor_v.x / h_speed
+            local uy = hor_v.z / h_speed
+        
             local arrow_len = max_arrow_len * speed_ratio
             local ex = math.floor(cx + ux * arrow_len + 0.5)
             local ey = math.floor(cy + uy * arrow_len + 0.5)
