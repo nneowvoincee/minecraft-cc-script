@@ -243,7 +243,7 @@ local function displayTask()
         
             local arrow_len = max_arrow_len * speed_ratio
             local ex = math.floor(cx + ux * arrow_len + 0.5)
-            local ey = math.floor(cy + uy * arrow_len + 0.5)
+            local ey = math.floor(cy - uy * arrow_len + 0.5)
             -- 裁剪到屏幕内
             ex = math.max(1, math.min(w, ex))
             ey = math.max(1, math.min(h, ey))
@@ -387,6 +387,7 @@ local function controlTask_main()
             current_position = vector.new(gps.locate())
             back_position = vector.new(getBackCompCoord())
             target_angle = getRelativeAngle(current_position, back_position, target)
+            local abs_angle = math.abs(target_angle)
             local distance = getRelativeDist(current_position, target)
 
             if distance > HOR_ZONE then
@@ -399,19 +400,24 @@ local function controlTask_main()
 
 
             if distance > HOR_ZONE then
-                moveForward(15)
+                
+                if abs_angle > 35 then
+                    moveForward(0)
+                else
+                    moveForward(15)
+                end
 
                 if target_angle > 0 then
-                    if math.abs(target_angle) >= 90 then
+                    if abs_angle >= 90 then
                         turnRight(15)
                     else
-                        turnRight(math.floor((target_angle/90)*15 + 0.5 ))
+                        turnRight(math.floor((abs_angle/90)*15 + 0.5 ))
                     end
                 else
                     if math.abs(target_angle) >= 90 then
                         turnLeft(15)
                     else
-                        turnLeft(math.floor((target_angle/90)*15))
+                        turnLeft(math.floor((abs_angle/90)*15))
                     end
                 end
             else
